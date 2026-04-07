@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/crab-meat-repos/cicerone-goclaw/llm"
+	"github.com/crab-meat-repos/cicerone-goclaw/web"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -22,9 +23,13 @@ var chatCmd = &cobra.Command{
 The chat uses the configured LLM provider (Ollama or llama.cpp).
 Messages are sent to the LLM and responses are streamed back.
 
-Type 'exit' or 'quit' to end the session.
-Type 'clear' to clear conversation history.
-Type 'history' to show conversation history.`,
+Commands:
+  /search <query>  - Search the web and get results
+  /fetch <url>     - Fetch content from a URL
+  /web <query>     - Search and include results in context
+  exit, quit, q    - End the session
+  clear            - Clear conversation history
+  history          - Show conversation history`,
 	RunE: runChat,
 }
 
@@ -81,11 +86,17 @@ func runChat(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("LLM provider not available")
 	}
 
+	// Create web search provider
+	webProvider := web.NewDuckDuckGoProvider()
+
 	stream, _ := cmd.Flags().GetBool("stream")
 
 	fmt.Printf("Connected to LLM at %s\n", baseURL)
 	fmt.Printf("Model: %s\n", model)
 	fmt.Println("Type 'exit' to quit, 'clear' to reset history, 'history' to view")
+	fmt.Println("Use /search <query> to search the web")
+	fmt.Println("Use /fetch <url> to fetch a webpage")
+	fmt.Println("Use /web <query> to search and include in chat")
 	fmt.Println()
 
 	reader := bufio.NewReader(os.Stdin)
@@ -112,11 +123,12 @@ func runChat(cmd *cobra.Command, args []string) error {
 			continue
 		}
 
-		switch input {
-		case "exit", "quit", "q":
+		// Handle commands
+		switch {
+		case input == "exit" || input == "quit" || input == "q":
 			fmt.Println("\nGoodbye!")
 			return nil
-		case "clear":
+		case input == "clear":
 			messages = messages[:0]
 			if systemPrompt != "" {
 				messages = append(messages, llm.Message{
@@ -127,7 +139,7 @@ func runChat(cmd *cobra.Command, args []string) error {
 			fmt.Println("History cleared.")
 			fmt.Println()
 			continue
-		case "history":
+		case input == "history":
 			if len(messages) == 0 || (len(messages) == 1 && messages[0].Role == "system") {
 				fmt.Println("No history yet.")
 			} else {
@@ -143,6 +155,56 @@ func runChat(cmd *cobra.Command, args []string) error {
 			}
 			fmt.Println()
 			continue
+		case strings.HasPrefix(input, "/search "):
+			query := strings.TrimPrefix(input, "/search ")
+			fmt.Printf("\nSearching for: %s\n", query)
+			results, err := webProvider.Search(context.Background(), query)
+			if err != nil {
+				fmt.Printf("Search error: %v\n\n", err)
+				continue
+			}
+			fmt.Println(web.FormatSearchResults(results))
+			continue
+		case strings.HasPrefix(input, "/fetch "):
+			url := strings.TrimPrefix(input, "/fetch ")
+			fmt.Printf("\nFetching: %s\n", url)
+			content, err := webProvider.Fetch(context.Background(), url)
+			if err != nil {
+				fmt.Printf("Fetch error: %v\n\n", err)
+				continue
+			}
+			fmt.Println("\nContent:")
+			fmt.Println(strings.Repeat("-", 50))
+			fmt.Println(content)
+			fmt.Println(strings.Repeat("-", 50))
+			fmt.Println()
+			continue
+		case strings.HasPrefix(input, "/web "):
+			query := strings.TrimPrefix(input, "/web ")
+			fmt.Printf("\nSearching for: %s\n", query)
+			results, err := webProvider.Search(context.Background(), query)
+			if err != nil {
+				fmt.Printf("Search error: %v\n\n", err)
+				continue
+			}
+			
+			// Build context from search results
+			var contextBuilder strings.Builder
+			contextBuilder.WriteString("Based on the following search results, please answer the question.\n\n")
+			for i, result := range results {
+				contextBuilder.WriteString(fmt.Sprintf("[%d] %s\n", i+1, result.Title))
+				if result.Snippet != "" {
+					contextBuilder.WriteString(fmt.Sprintf("    %s\n", result.Snippet))
+				}
+				if result.URL != "" {
+					contextBuilder.WriteString(fmt.Sprintf("    Source: %s\n", result.URL))
+				}
+				contextBuilder.WriteString("\n")
+			}
+			contextBuilder.WriteString(fmt.Sprintf("Question: %s\n", query))
+			
+			// Add to messages
+			input = contextBuilder.String()
 		}
 
 		// Add user message

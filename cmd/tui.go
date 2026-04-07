@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/crab-meat-repos/cicerone-goclaw/llm"
+	"github.com/crab-meat-repos/cicerone-goclaw/web"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
