@@ -317,8 +317,17 @@ func runGatewayRestartInteractive(reader *bufio.Reader) error {
 
 func runGatewayStatusInteractive(reader *bufio.Reader) error {
 	fmt.Println("\nGateway status...")
-	gatewayCmd.SetArgs([]string{"status"})
-	return gatewayCmd.Execute()
+	fmt.Println()
+	
+	// Call the status function directly instead of through cobra
+	err := runGatewayStatus(nil, nil)
+	
+	// Wait for user to read before returning to menu
+	fmt.Println()
+	fmt.Print("Press Enter to continue...")
+	reader.ReadString('\n')
+	
+	return err
 }
 
 func runSettingsInteractive(reader *bufio.Reader) error {
