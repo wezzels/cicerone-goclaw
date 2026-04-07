@@ -13,6 +13,10 @@ package llm
 
 import (
 	"context"
+	"net/http"
+	"strings"
+	"time"
+
 	"io"
 )
 
@@ -98,7 +102,12 @@ func NewOllamaProvider(cfg *Config) Provider {
 	if cfg == nil {
 		cfg = DefaultConfig()
 	}
-	return &OllamaProvider{config: cfg}
+	timeout := time.Duration(cfg.Timeout) * time.Second
+	return &OllamaProvider{
+		config:   cfg,
+		client:   &http.Client{Timeout: timeout},
+		endpoint: strings.TrimSuffix(cfg.BaseURL, "/"),
+	}
 }
 
 // NewLlamaCPPProvider creates a llama.cpp provider.
@@ -107,7 +116,12 @@ func NewLlamaCPPProvider(cfg *Config) Provider {
 		cfg = DefaultConfig()
 		cfg.BaseURL = "http://localhost:8080"
 	}
-	return &LlamaCPPProvider{config: cfg}
+	timeout := time.Duration(cfg.Timeout) * time.Second
+	return &LlamaCPPProvider{
+		config:   cfg,
+		client:   &http.Client{Timeout: timeout},
+		endpoint: strings.TrimSuffix(cfg.BaseURL, "/"),
+	}
 }
 
 // Helper to read all from stream
