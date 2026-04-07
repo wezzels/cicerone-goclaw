@@ -1,0 +1,59 @@
+# Cicerone Configuration Example
+# Copy to ~/.cicerone/config.yaml and customize
+
+# Telegram bot configuration
+telegram:
+  # Get your bot token from @BotFather on Telegram
+  bot_token: ""
+  
+  # List of allowed user IDs (empty = allow all)
+  # Use @userinfobot to get your user ID
+  allowed_users: []
+    # - 123456789
+    # - 987654321
+
+# LLM configuration
+llm:
+  # Provider: "ollama" or "llamacpp"
+  provider: ollama
+  
+  # API base URL
+  # For Ollama: http://localhost:11434
+  # For llama.cpp: http://localhost:8080
+  base_url: "http://localhost:11434"
+  
+  # Default model to use
+  model: "gemma3:12b"
+  
+  # Request timeout in seconds
+  timeout: 60
+
+# Gateway configuration (for future WebSocket API)
+gateway:
+  # Listen address for gateway
+  listen: "127.0.0.1:8080"
+  
+  # Session database path
+  session_db: "./data/sessions.db"
+
+# Logging configuration
+logging:
+  # Log level: debug, info, warn, error
+  level: info
+  
+  # Log file (optional, defaults to stdout)
+  # file: "/var/log/cicerone.log"
+
+# Security configuration
+security:
+  # Enable rate limiting
+  rate_limit: true
+  
+  # Max requests per minute per user
+  max_requests: 60
+  
+  # Block users after failed attempts
+  max_failed_attempts: 5
+  
+  # Block duration in minutes
+  block_duration: 30
