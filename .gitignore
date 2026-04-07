@@ -1,0 +1,42 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+cicerone
+cicerone.exe
+
+# Test binary
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Dependency directories
+vendor/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+
+# Paper output files
+docs/paper/output/
+docs/paper/*.aux
+docs/paper/*.log
+docs/paper/*.out
+
+# Audit files
+.audit/
+
+# Debug files
+debug
+*.debug
+
+# CI artifacts directory
+artifacts/

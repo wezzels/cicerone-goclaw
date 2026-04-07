@@ -1,0 +1,41 @@
+[Unit]
+Description=Cicerone Server - Secure Vault and Task Management
+Documentation=https://idm.wezzel.com/crab-meat-repos/cicerone
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=cicerone
+Group=cicerone
+Environment="CICERONE_HOST=0.0.0.0"
+Environment="CICERONE_PORT=5001"
+Environment="CICERONE_SECURITY=high"
+EnvironmentFile=/etc/cicerone/environment
+ExecStart=/usr/local/bin/cicerone serve start \
+  --host ${CICERONE_HOST} \
+  --port ${CICERONE_PORT} \
+  --security ${CICERONE_SECURITY} \
+  --token ${CICERONE_TOKEN} \
+  --vault-path /var/lib/cicerone/vault.db \
+  --tls-cert /etc/cicerone/certs/server.crt \
+  --tls-key /etc/cicerone/certs/server.key
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=30
+TimeoutStopSec=10
+
+# Security hardening
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/cicerone /var/log/cicerone
+ReadOnlyPaths=/etc/cicerone
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=512
+
+[Install]
+WantedBy=multi-user.target
