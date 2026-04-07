@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -34,28 +33,51 @@ func runTUI(cmd *cobra.Command, args []string) error {
 	reader := bufio.NewReader(os.Stdin)
 
 	for {
-		clearScreen()
+		// Clear screen using ANSI escape codes
+		fmt.Print("\033[2J\033[H")
+		
 		printMenu()
 
 		fmt.Print("\nChoice: ")
-		input, _ := reader.ReadString('\n')
+		input, err := reader.ReadString('\n')
+		if err != nil {
+			return fmt.Errorf("failed to read input: %w", err)
+		}
 		choice := strings.TrimSpace(input)
 
 		switch choice {
 		case "1":
-			runTelegramInteractive()
+			if err := runTelegramInteractive(reader); err != nil {
+				fmt.Printf("Error: %v\n", err)
+			}
+			waitForEnter(reader)
 		case "2":
-			runChatInteractive()
+			if err := runChatInteractive(reader); err != nil {
+				fmt.Printf("Error: %v\n", err)
+			}
+			waitForEnter(reader)
 		case "3":
-			runDoctorInteractive()
+			if err := runDoctorInteractive(reader); err != nil {
+				fmt.Printf("Error: %v\n", err)
+			}
+			waitForEnter(reader)
 		case "4":
-			runSecurityInteractive()
+			if err := runSecurityInteractive(reader); err != nil {
+				fmt.Printf("Error: %v\n", err)
+			}
+			waitForEnter(reader)
 		case "5":
-			runGatewayRestartInteractive()
+			if err := runGatewayRestartInteractive(reader); err != nil {
+				fmt.Printf("Error: %v\n", err)
+			}
+			waitForEnter(reader)
 		case "6":
-			runGatewayStatusInteractive()
+			if err := runGatewayStatusInteractive(reader); err != nil {
+				fmt.Printf("Error: %v\n", err)
+			}
+			waitForEnter(reader)
 		case "7":
-			runSettingsInteractive()
+			runSettingsInteractive(reader)
 		case "q", "Q", "quit", "exit":
 			fmt.Println("\nGoodbye!")
 			return nil
@@ -64,12 +86,6 @@ func runTUI(cmd *cobra.Command, args []string) error {
 			waitForEnter(reader)
 		}
 	}
-}
-
-func clearScreen() {
-	cmd := exec.Command("clear")
-	cmd.Stdout = os.Stdout
-	cmd.Run()
 }
 
 func printMenu() {
@@ -95,36 +111,47 @@ func waitForEnter(reader *bufio.Reader) {
 	reader.ReadString('\n')
 }
 
-func runTelegramInteractive() {
+func runTelegramInteractive(reader *bufio.Reader) error {
 	fmt.Println("\nStarting Telegram bot...")
-	exec.Command("cicerone", "telegram").Run()
+	fmt.Println("Press Ctrl+C to stop")
+	
+	// Get the telegram command and execute it
+	telegramCmd.SetArgs([]string{})
+	return telegramCmd.Execute()
 }
 
-func runChatInteractive() {
+func runChatInteractive(reader *bufio.Reader) error {
 	fmt.Println("\nStarting LLM chat...")
-	exec.Command("cicerone", "chat").Run()
+	chatCmd.SetArgs([]string{})
+	return chatCmd.Execute()
 }
 
-func runDoctorInteractive() {
+func runDoctorInteractive(reader *bufio.Reader) error {
 	fmt.Println("\nRunning health diagnostics...")
-	exec.Command("cicerone", "doctor").Run()
+	doctorCmd.SetArgs([]string{})
+	return doctorCmd.Execute()
 }
 
-func runSecurityInteractive() {
+func runSecurityInteractive(reader *bufio.Reader) error {
 	fmt.Println("\nRunning security audit...")
-	exec.Command("cicerone", "security").Run()
+	securityCmd.SetArgs([]string{})
+	return securityCmd.Execute()
 }
 
-func runGatewayRestartInteractive() {
+func runGatewayRestartInteractive(reader *bufio.Reader) error {
 	fmt.Println("\nRestarting gateway...")
-	exec.Command("cicerone", "gateway", "restart").Run()
+	gatewayCmd.SetArgs([]string{"restart"})
+	return gatewayCmd.Execute()
 }
 
-func runGatewayStatusInteractive() {
+func runGatewayStatusInteractive(reader *bufio.Reader) error {
 	fmt.Println("\nGateway status...")
-	exec.Command("cicerone", "gateway", "status").Run()
+	gatewayCmd.SetArgs([]string{"status"})
+	return gatewayCmd.Execute()
 }
 
-func runSettingsInteractive() {
+func runSettingsInteractive(reader *bufio.Reader) {
 	fmt.Println("\nSettings menu not yet implemented")
+	fmt.Println("\nUse 'cicerone config show' to view settings")
+	fmt.Println("Use 'cicerone config set <key> <value>' to change settings")
 }
