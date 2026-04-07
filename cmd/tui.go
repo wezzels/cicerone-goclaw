@@ -348,21 +348,23 @@ func runSettingsInteractive(reader *bufio.Reader) error {
 		case "1":
 			// Show config
 			fmt.Println("\nCurrent Configuration:")
-			fmt.Println("=" + strings.Repeat("=", 50))
-			configCmd.SetArgs([]string{"show"})
-			configCmd.Execute()
-			waitForEnter(reader)
+			fmt.Println(strings.Repeat("=", 50))
+			runConfigShow(nil, nil)
+			fmt.Println()
+			fmt.Print("Press Enter to continue...")
+			reader.ReadString('\n')
 		case "2":
 			// Set config value
 			fmt.Println("\nSet Configuration Value")
-			fmt.Println("=" + strings.Repeat("=", 50))
+			fmt.Println(strings.Repeat("=", 50))
 			fmt.Print("Enter key (e.g., telegram.bot_token): ")
 			key, _ := reader.ReadString('\n')
 			key = strings.TrimSpace(key)
 			
 			if key == "" {
 				fmt.Println("Cancelled.")
-				waitForEnter(reader)
+				fmt.Print("Press Enter to continue...")
+				reader.ReadString('\n')
 				continue
 			}
 			
@@ -370,42 +372,45 @@ func runSettingsInteractive(reader *bufio.Reader) error {
 			value, _ := reader.ReadString('\n')
 			value = strings.TrimSpace(value)
 			
-			configCmd.SetArgs([]string{"set", key, value})
-			if err := configCmd.Execute(); err != nil {
+			if err := runConfigSet(nil, []string{key, value}); err != nil {
 				fmt.Printf("Error: %v\n", err)
-			} else {
-				fmt.Printf("Set %s = %s\n", key, value)
 			}
-			waitForEnter(reader)
+			fmt.Println()
+			fmt.Print("Press Enter to continue...")
+			reader.ReadString('\n')
 		case "3":
 			// Run wizard
 			fmt.Println("\nConfiguration Wizard")
-			fmt.Println("=" + strings.Repeat("=", 50))
+			fmt.Println(strings.Repeat("=", 50))
 			wizardCmd.SetArgs([]string{})
 			if err := wizardCmd.Execute(); err != nil {
 				fmt.Printf("Error: %v\n", err)
 			}
-			waitForEnter(reader)
+			fmt.Println()
+			fmt.Print("Press Enter to continue...")
+			reader.ReadString('\n')
 		case "4":
 			// Edit config file
-			fmt.Println("\nOpen config file for editing...")
+			fmt.Println("\nEdit Config File")
+			fmt.Println(strings.Repeat("=", 50))
 			configPath := os.ExpandEnv("$HOME/.cicerone/config.yaml")
 			editor := os.Getenv("EDITOR")
 			if editor == "" {
 				editor = "nano"
 			}
-			fmt.Printf("Opening %s with %s...\n", configPath, editor)
-			// Just show the path - can't easily open editor from here
 			fmt.Printf("Config file: %s\n", configPath)
 			fmt.Println("Edit manually with: " + editor + " " + configPath)
-			waitForEnter(reader)
+			fmt.Println()
+			fmt.Print("Press Enter to continue...")
+			reader.ReadString('\n')
 		case "b", "B", "back":
 			return nil
 		case "q", "Q", "quit", "exit":
 			return nil
 		default:
 			fmt.Printf("\nUnknown choice: %s\n", choice)
-			waitForEnter(reader)
+			fmt.Print("Press Enter to continue...")
+			reader.ReadString('\n')
 		}
 	}
 }
