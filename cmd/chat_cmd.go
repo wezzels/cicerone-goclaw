@@ -3,11 +3,13 @@ package cmd
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
 	"time"
 
+	"github.com/crab-meat-repos/cicerone-goclaw/agent"
 	"github.com/crab-meat-repos/cicerone-goclaw/llm"
 	"github.com/crab-meat-repos/cicerone-goclaw/web"
 	"github.com/spf13/cobra"
@@ -17,7 +19,7 @@ import (
 // chatCmd represents the chat command
 var chatCmd = &cobra.Command{
 	Use:   "chat",
-	Short: "Interactive LLM chat",
+	Short: "Interactive LLM chat with agentic capabilities",
 	Long: `Start an interactive chat session with the LLM.
 
 The chat uses the configured LLM provider (Ollama or llama.cpp).
@@ -27,9 +29,26 @@ Commands:
   /search <query>  - Search the web and get results
   /fetch <url>     - Fetch content from a URL
   /web <query>     - Search and include results in context
-  exit, quit, q    - End the session
-  clear            - Clear conversation history
-  history          - Show conversation history`,
+
+  /run <command>   - Execute shell command
+  /cd <path>       - Change directory
+  /pwd              - Show current directory
+  /ls [path]        - List directory
+  /read <file>     - Read file contents
+  /write <file>    - Write to file (then enter content)
+  /append <file>   - Append to file
+  /delete <file>   - Delete file
+  /mkdir <dir>     - Create directory
+
+  /get <url>        - HTTP GET request
+  /post <url> <json> - HTTP POST request
+
+  /agent            - Enable agent mode (LLM can execute commands)
+  /stop              - Disable agent mode
+  /help              - Show all commands
+  exit, quit, q      - End the session
+  clear              - Clear conversation history
+  history            - Show conversation history`,
 	RunE: runChat,
 }
 
@@ -89,14 +108,16 @@ func runChat(cmd *cobra.Command, args []string) error {
 	// Create web search provider
 	webProvider := web.NewDuckDuckGoProvider()
 
+	// Create agent for command execution
+	workDir, _ := os.Getwd()
+	ag := agent.New(workDir)
+
 	stream, _ := cmd.Flags().GetBool("stream")
 
 	fmt.Printf("Connected to LLM at %s\n", baseURL)
 	fmt.Printf("Model: %s\n", model)
-	fmt.Println("Type 'exit' to quit, 'clear' to reset history, 'history' to view")
-	fmt.Println("Use /search <query> to search the web")
-	fmt.Println("Use /fetch <url> to fetch a webpage")
-	fmt.Println("Use /web <query> to search and include in chat")
+	fmt.Printf("Work Dir: %s\n", workDir)
+	fmt.Println("Type 'exit' to quit, '/help' for commands")
 	fmt.Println()
 
 	reader := bufio.NewReader(os.Stdin)
@@ -205,6 +226,155 @@ func runChat(cmd *cobra.Command, args []string) error {
 			
 			// Add to messages
 			input = contextBuilder.String()
+
+		// Agent commands
+		case input == "/help":
+			fmt.Println("\n" + ag.Help())
+			fmt.Println()
+			continue
+		case input == "/commands":
+			fmt.Println("\nAvailable commands:")
+			for _, cmd := range ag.ListCommands() {
+				fmt.Printf("  /%s\n", cmd)
+			}
+			fmt.Println()
+			continue
+
+		// Shell commands
+		case strings.HasPrefix(input, "/run "):
+			cmdStr := strings.TrimPrefix(input, "/run ")
+			output, err := ag.Execute(context.Background(), cmdStr)
+			if err != nil {
+				fmt.Printf("\nError: %v\n\n", err)
+			} else {
+				fmt.Println("\n" + output)
+			}
+			continue
+		case strings.HasPrefix(input, "/cd "):
+			dir := strings.TrimPrefix(input, "/cd ")
+			if err := ag.SetWorkDir(dir); err != nil {
+				fmt.Printf("\nError: %v\n\n", err)
+			} else {
+				fmt.Printf("\nChanged to: %s\n\n", ag.WorkDir())
+			}
+			continue
+		case input == "/pwd":
+			fmt.Printf("\n%s\n\n", ag.WorkDir())
+			continue
+		case strings.HasPrefix(input, "/ls"):
+			path := strings.TrimPrefix(input, "/ls ")
+			if path == input {
+				path = "."
+			}
+			entries, err := ag.ListDir(path)
+			if err != nil {
+				fmt.Printf("\nError: %v\n\n", err)
+				continue
+			}
+			fmt.Println()
+			for _, entry := range entries {
+				info, _ := entry.Info()
+				fmt.Printf("%s %8d %s\n", info.Mode().String()[:10], info.Size(), entry.Name())
+			}
+			fmt.Println()
+			continue
+
+		// File commands
+		case strings.HasPrefix(input, "/read "):
+			filePath := strings.TrimPrefix(input, "/read ")
+			content, err := ag.ReadFile(filePath)
+			if err != nil {
+				fmt.Printf("\nError: %v\n\n", err)
+			} else {
+				fmt.Println("\n" + strings.Repeat("-", 50))
+				fmt.Println(content)
+				fmt.Println(strings.Repeat("-", 50))
+			}
+			continue
+		case strings.HasPrefix(input, "/write "):
+			remaining := strings.TrimPrefix(input, "/write ")
+			parts := strings.SplitN(remaining, " ", 2)
+			if len(parts) < 1 {
+				fmt.Println("\nUsage: /write <file> <content>")
+				fmt.Println("       /write <file> (then enter content, Ctrl+D to save)\n")
+				continue
+			}
+			filePath := parts[0]
+			var content string
+			if len(parts) > 1 {
+				content = parts[1]
+			} else {
+				fmt.Println("\nEnter content (Ctrl+D to save):")
+				var lines []string
+				scanner := bufio.NewScanner(os.Stdin)
+				for scanner.Scan() {
+					lines = append(lines, scanner.Text())
+				}
+				content = strings.Join(lines, "\n")
+			}
+			if err := ag.WriteFile(filePath, content); err != nil {
+				fmt.Printf("\nError: %v\n\n", err)
+			} else {
+				fmt.Printf("\nWrote %d bytes to %s\n\n", len(content), filePath)
+			}
+			continue
+		case strings.HasPrefix(input, "/append "):
+			parts := strings.SplitN(strings.TrimPrefix(input, "/append "), " ", 2)
+			if len(parts) < 2 {
+				fmt.Println("\nUsage: /append <file> <content>\n")
+				continue
+			}
+			if err := ag.AppendFile(parts[0], parts[1]); err != nil {
+				fmt.Printf("\nError: %v\n\n", err)
+			} else {
+				fmt.Printf("\nAppended to %s\n\n", parts[0])
+			}
+			continue
+		case strings.HasPrefix(input, "/delete "):
+			filePath := strings.TrimPrefix(input, "/delete ")
+			if err := ag.DeleteFile(filePath); err != nil {
+				fmt.Printf("\nError: %v\n\n", err)
+			} else {
+				fmt.Printf("\nDeleted: %s\n\n", filePath)
+			}
+			continue
+		case strings.HasPrefix(input, "/mkdir "):
+			dir := strings.TrimPrefix(input, "/mkdir ")
+			if err := ag.Mkdir(dir); err != nil {
+				fmt.Printf("\nError: %v\n\n", err)
+			} else {
+				fmt.Printf("\nCreated: %s\n\n", dir)
+			}
+			continue
+
+		// HTTP commands
+		case strings.HasPrefix(input, "/get "):
+			url := strings.TrimPrefix(input, "/get ")
+			result, err := ag.HTTPGet(context.Background(), url, nil)
+			if err != nil {
+				fmt.Printf("\nError: %v\n\n", err)
+			} else {
+				fmt.Println("\n" + result)
+			}
+			continue
+		case strings.HasPrefix(input, "/post "):
+			remaining := strings.TrimPrefix(input, "/post ")
+			parts := strings.SplitN(remaining, " ", 2)
+			if len(parts) < 2 {
+				fmt.Println("\nUsage: /post <url> <json>\n")
+				continue
+			}
+			var data interface{}
+			if err := json.Unmarshal([]byte(parts[1]), &data); err != nil {
+				data = parts[1]
+			}
+			result, err := ag.HTTPPost(context.Background(), parts[0], data, nil)
+			if err != nil {
+				fmt.Printf("\nError: %v\n\n", err)
+			} else {
+				fmt.Println("\n" + result)
+			}
+			continue
 		}
 
 		// Add user message
