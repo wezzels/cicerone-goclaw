@@ -99,7 +99,7 @@ func runChat(cmd *cobra.Command, args []string) error {
 	cfg := &llm.Config{
 		BaseURL: baseURL,
 		Model:   model,
-		Timeout: timeout,
+		Timeout: timeout * 3, // Triple timeout for autonomous agent with many tools
 	}
 	provider := llm.NewProvider(cfg)
 
@@ -402,9 +402,10 @@ ALWAYS use the tools to perform actions. The tools work and will execute your co
 			}
 
 			// Execute task with native function calling
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-			result, err := autoAgent.ExecuteTaskWithTools(ctx, task, onProgress, provider)
-			cancel()
+			// Use longer timeout for autonomous agent
+			agCtx, agCancel := context.WithTimeout(context.Background(), 10*time.Minute)
+			result, err := autoAgent.ExecuteTaskWithTools(agCtx, task, onProgress, provider)
+			agCancel()
 
 			if err != nil {
 				fmt.Printf("\nTask failed: %v\n\n", err)

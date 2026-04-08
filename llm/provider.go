@@ -13,6 +13,8 @@ package llm
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"runtime"
 	"strings"
@@ -74,15 +76,51 @@ type ToolFunction struct {
 
 // ToolCall represents a tool call from the LLM.
 type ToolCall struct {
-	ID       string                 `json:"id"`
-	Type     string                 `json:"type"`     // "function"
-	Function ToolCallFunction        `json:"function"`
+	ID       string          `json:"id"`
+	Type     string          `json:"type"`     // "function"
+	Function ToolCallFunction `json:"function"`
+}
+
+// UnmarshalJSON handles both string and object arguments.
+func (tcf *ToolCallFunction) UnmarshalJSON(data []byte) error {
+	// First try to unmarshal as a struct with string arguments
+	type Alias struct {
+		Name      string `json:"name"`
+		Arguments string `json:"arguments"`
+	}
+	var alias Alias
+	if err := json.Unmarshal(data, &alias); err == nil && alias.Arguments != "" {
+		tcf.Name = alias.Name
+		tcf.Arguments = alias.Arguments
+		return nil
+	}
+
+	// Try to unmarshal as struct with object arguments
+	type AliasObj struct {
+		Name      string                 `json:"name"`
+		Arguments map[string]interface{} `json:"arguments"`
+	}
+	var aliasObj AliasObj
+	if err := json.Unmarshal(data, &aliasObj); err == nil && aliasObj.Arguments != nil {
+		tcf.Name = aliasObj.Name
+		tcf.RawArguments = aliasObj.Arguments
+		// Convert to JSON string
+		argsJSON, _ := json.Marshal(aliasObj.Arguments)
+		tcf.Arguments = string(argsJSON)
+		return nil
+	}
+
+	return fmt.Errorf("invalid tool call function format")
 }
 
 // ToolCallFunction contains the function name and arguments.
+// Arguments can be either a string (JSON) or an object (map).
+// We use a custom type to handle both cases.
 type ToolCallFunction struct {
-	Name      string `json:"name"`
-	Arguments string `json:"arguments"` // JSON string
+	Name      string                 `json:"name"`
+	Arguments string                 `json:"arguments"`
+	// RawArguments stores the original arguments if they came as an object
+	RawArguments map[string]interface{} `json:"-"` // Populated during unmarshal
 }
 
 // ChatResponse is the response from ChatWithTools.

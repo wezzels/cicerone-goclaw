@@ -220,21 +220,21 @@ func (a *AutonomousAgent) ExecuteTaskWithTools(ctx context.Context, task string,
 	}
 
 	// System prompt for autonomous behavior
-	systemPrompt := `You are an autonomous agent with access to tools. Your job is to complete tasks by:
-1. Breaking down the task into steps
-2. Using tools to accomplish each step
-3. Evaluating results and iterating as needed
-4. Completing when the task is done
+	systemPrompt := `You are an autonomous agent. You MUST use the provided tools to complete tasks.
 
-When the task is complete, respond with a final message summarizing what was done.
-Be thorough but efficient. If a tool fails, try alternative approaches.
+When you receive a task:
+1. Call the appropriate tool immediately
+2. Do NOT describe what you will do - actually call the tool
+3. Wait for results and continue if needed
+
+Available tools: write_file, read_file, run_shell, web_search, web_fetch
 
 Current working directory: ` + a.agent.WorkDir()
 
 	// Build messages
 	messages := []llm.Message{
 		{Role: "system", Content: systemPrompt},
-		{Role: "user", Content: fmt.Sprintf("Task: %s\n\nPlease complete this task. Break it down into steps and use tools as needed.", task)},
+		{Role: "user", Content: task},
 	}
 
 	for step := 1; step <= a.maxSteps; step++ {
@@ -254,6 +254,21 @@ Current working directory: ` + a.agent.WorkDir()
 		if err != nil {
 			result.Error = err
 			return result, err
+		}
+
+		// Debug: log what we got
+		if onProgress != nil {
+			if len(resp.ToolCalls) > 0 {
+				toolNames := make([]string, len(resp.ToolCalls))
+				for i, tc := range resp.ToolCalls {
+					toolNames[i] = tc.Function.Name
+				}
+				onProgress(fmt.Sprintf("Step %d: LLM requested tools: %v", step, toolNames))
+			} else if resp.Content != "" {
+				onProgress(fmt.Sprintf("Step %d: LLM responded: %s", step, truncate(resp.Content, 100)))
+			} else {
+				onProgress(fmt.Sprintf("Step %d: LLM returned empty response", step))
+			}
 		}
 
 		// Check for tool calls
@@ -299,15 +314,23 @@ Current working directory: ` + a.agent.WorkDir()
 			})
 
 			// Add tool results as separate messages
-			for _, tr := range toolResults {
+			for i, tr := range toolResults {
 				resultJSON, _ := json.Marshal(map[string]interface{}{
 					"success": tr.Success,
 					"output":  tr.Output,
 				})
+				// Use the corresponding tool call ID
+				toolCallID := ""
+				if i < len(toolCalls) {
+					toolCallID = toolCalls[i].ID
+				}
+				if toolCallID == "" {
+					toolCallID = tr.Name // Fallback to tool name
+				}
 				messages = append(messages, llm.Message{
 					Role:       "tool",
 					Content:    string(resultJSON),
-					ToolCallID: tr.Name, // Use tool name as ID
+					ToolCallID: toolCallID,
 				})
 			}
 			continue
@@ -424,4 +447,12 @@ func jsonUnmarshal(data string, v interface{}) error {
 
 func jsonUnmarshalStrict(data string, v interface{}) error {
 	return json.Unmarshal([]byte(data), v)
+}
+
+// truncate shortens a string to maxLen characters.
+func truncate(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
 }
