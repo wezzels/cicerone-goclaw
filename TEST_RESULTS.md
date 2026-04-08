@@ -12,19 +12,20 @@
 | **Cores** | 6 cores / 12 threads | 8 cores / 16 threads |
 | **RAM** | 54 GB | 124 GB |
 | **Go Version** | go1.25.0 | go1.25.0 |
+| **Model** | mistral:latest | llama3.1:8b |
+| **Tool Support** | ✅ Yes | ✅ Yes |
 
 ## Go Build Performance
 
 | Test | thing1 | darth | Winner |
 |------|--------|-------|--------|
-| **Build (Clean)** | 0.738s | 0.329s | darth 55% faster |
 | **Build (Cached)** | 0.454s | 0.320s | darth 30% faster |
 | **Tests** | 0.447s | 0.305s | darth 32% faster |
 | **Binary Size** | 15 MB | 15 MB | Tie |
 
 ## Test Results
 
-### ✅ Passing Tests
+### ✅ All Tests Passing
 
 | Test | thing1 | darth | Notes |
 |------|--------|-------|-------|
@@ -34,71 +35,71 @@
 | **Pi 500 Digits** | ✅ Pass | ✅ Pass | Both output correct |
 | **Direct Commands** | ✅ Pass | ✅ Pass | /write, /read, /run work |
 | **Tool Calling API** | ✅ Pass | ✅ Pass | Ollama returns tool_calls |
-| **Autonomous Agent** | ✅ Partial | ⚠️ Skipped | Creates files, multi-step fails |
+| **Autonomous Agent** | ✅ Pass | ✅ Pass | Multi-step tasks work |
 
-### Tool Calling Test Results
+### Autonomous Agent Test Results
+
+**Test:** `/task Create a file /tmp/autonomous_test.txt with content 'Test'`
 
 **thing1 (mistral:latest):**
 ```
-Tool calls: [{"name": "write_file", "arguments": {"path": "/tmp/test.txt", "content": "hello"}}]
-Status: ✅ Working
+Step 1: LLM requested tools: [create_directory write_file]
+Step 1: Executing create_directory, write_file
+Step 2: LLM responded: The file has been successfully created...
+Task completed successfully!
 ```
 
-**darth (gemma3:12b):**
+**darth (llama3.1:8b):**
 ```
-Error: registry.ollama.ai/library/gemma3:12b does not support tools
-Status: ❌ Model doesn't support function calling
-```
-
-### Autonomous Agent Results
-
-**Test:** `/task Create a file /tmp/autonomous_test.txt with content 'Autonomous agent test successful'`
-
-| Step | Status | Output |
-|------|--------|--------|
-| Step 1: Tool calls | ✅ Pass | `[create_directory, write_file]` |
-| Step 1: Execution | ✅ Pass | File created successfully |
-| Step 2: Continuation | ❌ Fail | `400 Bad Request` from Ollama |
-
-**File verification:**
-```
-$ cat /tmp/autonomous_test.txt
-Autonomous agent test successful ✅
+Step 1: LLM requested tools: [write_file]
+Step 1: Executing write_file
+Step 2: LLM responded: The tool call was successful...
+Task completed successfully!
 ```
 
-**Known Issue:** Multi-step tasks fail on step 2 with Ollama tool response format error. Single-step tasks work correctly.
+## Configuration
 
-## Code Quality
+### thing1 (~/.cicerone/config.yaml)
+```yaml
+llm:
+  provider: ollama
+  base_url: http://localhost:11434
+  model: mistral:latest
+  timeout: 300
+  context_size: 0  # auto-detect
+```
 
-| Metric | Result |
-|--------|--------|
-| **Linting** | ✅ Pass |
-| **Coverage** | ~70% (estimated) |
-| **Binary Size** | 15 MB |
-| **Dependencies** | Minimal |
+### darth (~/.cicerone/config.yaml)
+```yaml
+llm:
+  provider: ollama
+  base_url: http://localhost:11434
+  model: llama3.1:8b
+  timeout: 300
+  context_size: 0  # auto-detect
+```
 
-## Files Created During Testing
+## Models with Tool Support
 
-- `/tmp/test_hello.txt` - Hello World ✅
-- `/tmp/autonomous_test.txt` - Autonomous agent test ✅
-- `/tmp/pi` - Pi calculation binary ✅
+| Model | Tool Support | Used On |
+|-------|-------------|---------|
+| mistral:latest | ✅ Yes | thing1 |
+| llama3.1:8b | ✅ Yes | darth |
+| gemma3:12b | ❌ No | (deprecated) |
 
-## Recommendations
+## Key Fix: Multi-step Task Continuation
 
-### For Development
-- Use **thing1** for local development (sufficient performance)
-- Use **darth** for CI/CD builds (30-55% faster)
+**Problem:** Multi-step autonomous tasks failed with `400 Bad Request` when sending tool results back to Ollama.
 
-### For Autonomous Agent
-- Single-step tasks work correctly
-- Multi-step tasks need investigation of Ollama tool response format
-- Consider using models that support tools (mistral, llama3.1)
+**Root Cause:** Ollama expects tool call `arguments` as an object (`{}`), not a JSON string (`"{...}"`).
 
-### For Models
-- **mistral:latest** - Supports tools ✅
-- **gemma3:12b** - No tool support ❌
-- **llama3.1:8b** - Should support tools (needs testing)
+**Solution:** 
+- Added `RawArguments map[string]interface{}` field with `json:"arguments"` tag
+- Custom `MarshalJSON()` outputs arguments as object for Ollama
+- Preserved string `Arguments` for internal use
+
+**Commit:** `9311f80` - fix: Multi-step autonomous task continuation now works
 
 ---
 
-*Last updated: 2026-04-08 18:37 UTC*
+*Last updated: 2026-04-08 20:00 UTC*
