@@ -314,10 +314,23 @@ func (a *AutonomousAgent) ExecuteTaskWithTools(ctx context.Context, task string,
 			result.Steps = append(result.Steps, stepResult)
 
 			// Add assistant message with tool calls
+			// Ensure type is set correctly for Ollama
+			toolCallsForMessage := make([]llm.ToolCall, len(resp.ToolCalls))
+			for i, tc := range resp.ToolCalls {
+				toolCallsForMessage[i] = llm.ToolCall{
+					ID:   tc.ID,
+					Type: "function", // Must be set for Ollama
+					Function: llm.ToolCallFunction{
+						Name:         tc.Function.Name,
+						Arguments:    tc.Function.Arguments,
+						RawArguments: tc.Function.RawArguments, // Must be set for marshaling
+					},
+				}
+			}
 			messages = append(messages, llm.Message{
 				Role:      "assistant",
 				Content:   resp.Content,
-				ToolCalls: resp.ToolCalls,
+				ToolCalls: toolCallsForMessage,
 			})
 
 			// Add tool results as tool role messages (Ollama format)

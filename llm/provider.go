@@ -92,6 +92,8 @@ func (tcf *ToolCallFunction) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &alias); err == nil && alias.Arguments != "" {
 		tcf.Name = alias.Name
 		tcf.Arguments = alias.Arguments
+		// Parse into RawArguments too for marshaling
+		json.Unmarshal([]byte(alias.Arguments), &tcf.RawArguments)
 		return nil
 	}
 
@@ -104,7 +106,7 @@ func (tcf *ToolCallFunction) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &aliasObj); err == nil && aliasObj.Arguments != nil {
 		tcf.Name = aliasObj.Name
 		tcf.RawArguments = aliasObj.Arguments
-		// Convert to JSON string
+		// Convert to JSON string for internal use
 		argsJSON, _ := json.Marshal(aliasObj.Arguments)
 		tcf.Arguments = string(argsJSON)
 		return nil
@@ -117,10 +119,22 @@ func (tcf *ToolCallFunction) UnmarshalJSON(data []byte) error {
 // Arguments can be either a string (JSON) or an object (map).
 // We use a custom type to handle both cases.
 type ToolCallFunction struct {
-	Name      string                 `json:"name"`
-	Arguments string                 `json:"arguments"`
-	// RawArguments stores the original arguments if they came as an object
-	RawArguments map[string]interface{} `json:"-"` // Populated during unmarshal
+	Name         string                 `json:"name"`
+	Arguments    string                 `json:"-"` // Internal representation (JSON string)
+	RawArguments map[string]interface{} `json:"arguments"` // Ollama expects object format
+}
+
+// MarshalJSON ensures arguments are sent as object for Ollama.
+func (tcf ToolCallFunction) MarshalJSON() ([]byte, error) {
+	// Ollama expects arguments as an object, not a JSON string
+	type Alias struct {
+		Name      string                 `json:"name"`
+		Arguments map[string]interface{} `json:"arguments"`
+	}
+	return json.Marshal(Alias{
+		Name:      tcf.Name,
+		Arguments: tcf.RawArguments,
+	})
 }
 
 // ChatResponse is the response from ChatWithTools.
