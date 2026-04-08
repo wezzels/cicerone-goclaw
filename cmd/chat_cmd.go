@@ -3,7 +3,6 @@ package cmd
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -30,6 +29,10 @@ Commands:
   /fetch <url>     - Fetch content from a URL
   /web <query>     - Search and include results in context
 
+  /task <task>     - Run autonomous agent task
+  /agent            - Enable autonomous mode (LLM can execute commands)
+  /stop              - Disable autonomous mode
+
   /run <command>   - Execute shell command
   /cd <path>       - Change directory
   /pwd              - Show current directory
@@ -43,8 +46,6 @@ Commands:
   /get <url>        - HTTP GET request
   /post <url> <json> - HTTP POST request
 
-  /agent            - Enable agent mode (LLM can execute commands)
-  /stop              - Disable agent mode
   /help              - Show all commands
   exit, quit, q      - End the session
   clear              - Clear conversation history
@@ -111,6 +112,9 @@ func runChat(cmd *cobra.Command, args []string) error {
 	// Create agent for command execution
 	workDir, _ := os.Getwd()
 	ag := agent.New(workDir)
+
+	// Create autonomous agent
+	autoAgent := agent.NewAutonomousAgent(ag)
 
 	stream, _ := cmd.Flags().GetBool("stream")
 
@@ -347,33 +351,66 @@ func runChat(cmd *cobra.Command, args []string) error {
 			}
 			continue
 
-		// HTTP commands
-		case strings.HasPrefix(input, "/get "):
-			url := strings.TrimPrefix(input, "/get ")
-			result, err := ag.HTTPGet(context.Background(), url, nil)
-			if err != nil {
-				fmt.Printf("\nError: %v\n\n", err)
-			} else {
-				fmt.Println("\n" + result)
+		case strings.HasPrefix(input, "/task "):
+			task := strings.TrimPrefix(input, "/task ")
+			fmt.Printf("\nStarting autonomous task: %s\n", task)
+			fmt.Println("Press Ctrl+C to interrupt.")
+			fmt.Println()
+
+			// Chat function for autonomous agent
+			chatFn := func(ctx context.Context, msgs []agent.ChatMessage) (string, error) {
+				// Convert to llm.Message
+				llmMsgs := make([]llm.Message, len(msgs))
+				for i, m := range msgs {
+					llmMsgs[i] = llm.Message{Role: m.Role, Content: m.Content}
+				}
+				return provider.Chat(ctx, llmMsgs)
 			}
-			continue
-		case strings.HasPrefix(input, "/post "):
-			remaining := strings.TrimPrefix(input, "/post ")
-			parts := strings.SplitN(remaining, " ", 2)
-			if len(parts) < 2 {
-				fmt.Println("\nUsage: /post <url> <json>\n")
+
+			// Progress callback
+			onProgress := func(status string) {
+				fmt.Printf("[Agent] %s\n", status)
+			}
+
+			// Execute task
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			result, err := autoAgent.ExecuteTask(ctx, task, onProgress, chatFn)
+			cancel()
+
+			if err != nil {
+				fmt.Printf("\nTask failed: %v\n\n", err)
 				continue
 			}
-			var data interface{}
-			if err := json.Unmarshal([]byte(parts[1]), &data); err != nil {
-				data = parts[1]
-			}
-			result, err := ag.HTTPPost(context.Background(), parts[0], data, nil)
-			if err != nil {
-				fmt.Printf("\nError: %v\n\n", err)
+
+			// Print result
+			fmt.Println()
+			fmt.Println(strings.Repeat("=", 50))
+			if result.Completed {
+				fmt.Println("Task completed successfully!")
 			} else {
-				fmt.Println("\n" + result)
+				fmt.Printf("Task incomplete: %v\n", result.Error)
 			}
+			fmt.Println(strings.Repeat("=", 50))
+			fmt.Println()
+			if result.FinalOutput != "" {
+				fmt.Println("Output:")
+				fmt.Println(result.FinalOutput)
+				fmt.Println()
+			}
+			fmt.Printf("Steps taken: %d\n", len(result.Steps))
+			for _, step := range result.Steps {
+				fmt.Printf("  Step %d: ", step.StepNumber)
+				if len(step.ToolCalls) > 0 {
+					toolNames := make([]string, len(step.ToolCalls))
+					for i, tc := range step.ToolCalls {
+						toolNames[i] = tc.Name
+					}
+					fmt.Printf("%s\n", strings.Join(toolNames, ", "))
+				} else {
+					fmt.Println("(no tools)")
+				}
+			}
+			fmt.Println()
 			continue
 		}
 

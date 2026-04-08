@@ -254,6 +254,11 @@ func (a *Agent) ListCommands() []string {
 	return cmds
 }
 
+// ResolvePath resolves a path relative to workdir (exported for Executor).
+func (a *Agent) ResolvePath(path string) string {
+	return a.resolvePath(path)
+}
+
 // resolvePath resolves a path relative to workdir.
 func (a *Agent) resolvePath(path string) string {
 	if filepath.IsAbs(path) {
