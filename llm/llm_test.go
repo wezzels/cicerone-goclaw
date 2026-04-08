@@ -19,8 +19,8 @@ func TestDefaultConfig(t *testing.T) {
 		t.Errorf("Expected default model gemma3:12b, got %s", cfg.Model)
 	}
 
-	if cfg.Timeout != 60 {
-		t.Errorf("Expected default timeout 60, got %d", cfg.Timeout)
+	if cfg.Timeout != 300 {
+		t.Errorf("Expected default timeout 300 (5 min), got %d", cfg.Timeout)
 	}
 }
 

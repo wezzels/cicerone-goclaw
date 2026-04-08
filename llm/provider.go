@@ -120,8 +120,8 @@ func DefaultConfig() *Config {
 	return &Config{
 		BaseURL:     "http://localhost:11434",
 		Model:       "gemma3:12b",
-		Timeout:     60,
-		ContextSize: 0, // auto-detect
+		Timeout:     300, // 5 minutes for large models with tools
+		ContextSize: 0,  // auto-detect
 	}
 }
 

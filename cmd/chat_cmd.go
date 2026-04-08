@@ -81,7 +81,7 @@ func runChat(cmd *cobra.Command, args []string) error {
 	// Get timeout
 	timeout := viper.GetInt("llm.timeout")
 	if timeout == 0 {
-		timeout = 120
+		timeout = 300 // 5 minutes for large models with tools
 	}
 
 	// Create provider
