@@ -417,3 +417,45 @@ func TestMessageToolResponse(t *testing.T) {
 		t.Errorf("Expected ToolCallID 'call-123', got %s", msg.ToolCallID)
 	}
 }
+
+func TestGetOptimalContextSize(t *testing.T) {
+	size := GetOptimalContextSize()
+	
+	// Should return a valid context size
+	validSizes := []int{2048, 4096, 8192, 16384, 32768}
+	found := false
+	for _, valid := range validSizes {
+		if size == valid {
+			found = true
+			break
+		}
+	}
+	
+	if !found {
+		t.Errorf("Expected valid context size (2048, 4096, 8192, 16384, or 32768), got %d", size)
+	}
+	
+	// Should be at least 2048
+	if size < 2048 {
+		t.Errorf("Expected context size >= 2048, got %d", size)
+	}
+}
+
+func TestConfigContextSize(t *testing.T) {
+	// Default config should have 0 (auto-detect)
+	cfg := DefaultConfig()
+	if cfg.ContextSize != 0 {
+		t.Errorf("Expected default ContextSize 0 (auto), got %d", cfg.ContextSize)
+	}
+	
+	// Can set custom context size
+	cfg = &Config{
+		BaseURL:     "http://localhost:11434",
+		Model:       "gemma3:12b",
+		Timeout:     60,
+		ContextSize: 8192,
+	}
+	if cfg.ContextSize != 8192 {
+		t.Errorf("Expected ContextSize 8192, got %d", cfg.ContextSize)
+	}
+}

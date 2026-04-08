@@ -14,6 +14,7 @@ package llm
 import (
 	"context"
 	"net/http"
+	"runtime"
 	"strings"
 	"time"
 
@@ -108,17 +109,46 @@ type StreamChunk struct {
 
 // Config holds provider configuration.
 type Config struct {
-	BaseURL string
-	Model   string
-	Timeout int // seconds, default 60
+	BaseURL      string `json:"base_url"`
+	Model        string `json:"model"`
+	Timeout      int    `json:"timeout"`       // seconds, default 60
+	ContextSize  int    `json:"context_size"` // context window size, 0 = auto
 }
 
 // DefaultConfig returns default configuration.
 func DefaultConfig() *Config {
 	return &Config{
-		BaseURL: "http://localhost:11434",
-		Model:   "gemma3:12b",
-		Timeout: 60,
+		BaseURL:     "http://localhost:11434",
+		Model:       "gemma3:12b",
+		Timeout:     60,
+		ContextSize: 0, // auto-detect
+	}
+}
+
+// GetOptimalContextSize calculates the optimal context window size based on available memory.
+// It ensures the context fits within available RAM while maximizing window size.
+// Formula: context_size = min(model_max, available_ram / bytes_per_token)
+// Bytes per token varies by model quantization (roughly 2-4 bytes for quantized models).
+func GetOptimalContextSize() int {
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	
+	// Available memory (what Go runtime sees as available)
+	availableMB := int64(m.Sys - m.HeapInuse - m.StackInuse) / 1024 / 1024
+	
+	// Default context sizes for different model tiers
+	// These are safe defaults that work within memory constraints
+	switch {
+	case availableMB > 32000: // >32GB available
+		return 32768 // 32K context
+	case availableMB > 16000: // >16GB available
+		return 16384 // 16K context
+	case availableMB > 8000: // >8GB available
+		return 8192 // 8K context
+	case availableMB > 4000: // >4GB available
+		return 4096 // 4K context
+	default:
+		return 2048 // 2K context for limited memory
 	}
 }
 

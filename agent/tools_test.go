@@ -83,32 +83,44 @@ func TestToolsToOllamaFormat(t *testing.T) {
 
 	// Verify structure
 	for _, tool := range ollamaTools {
-		toolMap, ok := tool["function"].(map[string]interface{})
-		if !ok {
-			t.Error("Tool missing function field")
+		if tool.Type != "function" {
+			t.Error("Tool type should be 'function'")
 			continue
 		}
 
-		name, ok := toolMap["name"].(string)
-		if !ok || name == "" {
+		if tool.Function.Name == "" {
 			t.Error("Tool function missing name")
 		}
 
-		desc, ok := toolMap["description"].(string)
-		if !ok || desc == "" {
-			t.Errorf("Tool %s missing description", name)
-		}
+		if tool.Function.Description == "" {
+			t.Errorf("Tool %s missing description", tool.Function.Name)
 
-		params, ok := toolMap["parameters"].(map[string]interface{})
-		if !ok {
-			t.Errorf("Tool %s missing parameters", name)
+		}
+	}
+	// Verify structure
+	for _, tool := range ollamaTools {
+		if tool.Type != "function" {
+			t.Error("Tool type should be 'function'")
 			continue
 		}
 
+		if tool.Function.Name == "" {
+			t.Error("Tool function missing name")
+		}
+
+		if tool.Function.Description == "" {
+			t.Errorf("Tool %s missing description", tool.Function.Name)
+		}
+
 		// Check parameters has type
-		paramType, ok := params["type"].(string)
+		paramType, ok := tool.Function.Parameters["type"].(string)
 		if !ok || paramType != "object" {
-			t.Errorf("Tool %s parameters should have type 'object'", name)
+			t.Errorf("Tool %s parameters should have type 'object'", tool.Function.Name)
+		}
+
+		// Check properties exists
+		if _, ok := tool.Function.Parameters["properties"]; !ok {
+			t.Errorf("Tool %s missing properties", tool.Function.Name)
 		}
 	}
 }

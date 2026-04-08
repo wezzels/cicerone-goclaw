@@ -23,10 +23,11 @@ var _ Provider = (*OllamaProvider)(nil)
 
 // ollamaGenerateRequest is the request body for /api/generate.
 type ollamaGenerateRequest struct {
-	Model  string `json:"model"`
-	Prompt string `json:"prompt"`
-	Stream bool   `json:"stream"`
-	Raw    bool   `json:"raw,omitempty"`
+	Model   string                 `json:"model"`
+	Prompt  string                 `json:"prompt"`
+	Stream  bool                   `json:"stream"`
+	Raw     bool                   `json:"raw,omitempty"`
+	Options map[string]interface{} `json:"options,omitempty"`
 }
 
 // ollamaGenerateResponse is the response from /api/generate.
@@ -43,6 +44,7 @@ type ollamaChatRequest struct {
 	Messages []Message `json:"messages"`
 	Stream   bool      `json:"stream"`
 	Tools    []Tool    `json:"tools,omitempty"`
+	Options  map[string]interface{} `json:"options,omitempty"`
 }
 
 // ollamaChatResponse is the response from /api/chat.
@@ -90,28 +92,84 @@ func (p *OllamaProvider) Generate(ctx context.Context, prompt string) (string, e
 }
 
 func (p *OllamaProvider) GenerateStream(ctx context.Context, prompt string) (<-chan StreamChunk, error) {
+	// Get optimal context size if not specified
+	contextSize := p.config.ContextSize
+	if contextSize == 0 {
+		contextSize = GetOptimalContextSize()
+	}
+
 	req := ollamaGenerateRequest{
 		Model:  p.config.Model,
 		Prompt: prompt,
 		Stream: true,
+		Options: map[string]interface{}{
+			"num_ctx": contextSize,
+		},
 	}
 
 	return p.streamRequest(ctx, "/api/generate", req)
 }
 
 func (p *OllamaProvider) Chat(ctx context.Context, messages []Message) (string, error) {
-	stream, err := p.ChatStream(ctx, messages)
-	if err != nil {
-		return "", err
+	// Get optimal context size if not specified
+	contextSize := p.config.ContextSize
+	if contextSize == 0 {
+		contextSize = GetOptimalContextSize()
 	}
-	return readAll(stream)
+
+	req := ollamaChatRequest{
+		Model:    p.config.Model,
+		Messages: messages,
+		Stream:   false,
+		Options: map[string]interface{}{
+			"num_ctx": contextSize,
+		},
+	}
+
+	jsonBody, err := json.Marshal(req)
+	if err != nil {
+		return "", fmt.Errorf("encoding request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", p.endpoint+"/api/chat", strings.NewReader(string(jsonBody)))
+	if err != nil {
+		return "", fmt.Errorf("creating request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := p.client.Do(httpReq)
+	if err != nil {
+		return "", fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("unexpected status %s: %s", resp.Status, string(body))
+	}
+
+	var ollamaResp ollamaChatResponse
+	if err := json.NewDecoder(resp.Body).Decode(&ollamaResp); err != nil {
+		return "", fmt.Errorf("decoding response: %w", err)
+	}
+
+	return ollamaResp.Message.Content, nil
 }
 
 func (p *OllamaProvider) ChatStream(ctx context.Context, messages []Message) (<-chan StreamChunk, error) {
+	// Get optimal context size if not specified
+	contextSize := p.config.ContextSize
+	if contextSize == 0 {
+		contextSize = GetOptimalContextSize()
+	}
+
 	req := ollamaChatRequest{
 		Model:    p.config.Model,
 		Messages: messages,
 		Stream:   true,
+		Options: map[string]interface{}{
+			"num_ctx": contextSize,
+		},
 	}
 
 	return p.streamRequest(ctx, "/api/chat", req)
@@ -120,11 +178,20 @@ func (p *OllamaProvider) ChatStream(ctx context.Context, messages []Message) (<-
 // ChatWithTools sends a chat request with tools and returns the response.
 // If tools are provided, the LLM may return tool calls instead of text.
 func (p *OllamaProvider) ChatWithTools(ctx context.Context, messages []Message, tools []Tool) (*ChatResponse, error) {
+	// Get optimal context size if not specified
+	contextSize := p.config.ContextSize
+	if contextSize == 0 {
+		contextSize = GetOptimalContextSize()
+	}
+
 	req := ollamaChatRequest{
 		Model:    p.config.Model,
 		Messages: messages,
 		Stream:   false,
 		Tools:    tools,
+		Options: map[string]interface{}{
+			"num_ctx": contextSize,
+		},
 	}
 
 	jsonBody, err := json.Marshal(req)
