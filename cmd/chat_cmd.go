@@ -139,17 +139,24 @@ func runChat(cmd *cobra.Command, args []string) error {
 	}
 
 	// Add tools system prompt
-	toolsPrompt := `You have access to tools that you can call to help the user. When the user asks you to do something that requires external data or actions, use the appropriate tool.
+	toolsPrompt := `You are an AI assistant with access to tools. When the user asks you to do something that requires file operations, web searches, or running commands, you MUST call the appropriate tool to actually perform the action.
+
+IMPORTANT: Do NOT just describe what you would do. You MUST actually call the tools to execute the requested actions. The tools are real and will be executed.
 
 Available tools:
-- web_search: Search the web for information (use for "search for X", "look up X")
-- web_fetch: Fetch content from a URL (use for "get content from URL")
-- write_file: Write content to a file
-- read_file: Read a file
-- run_shell: Execute a shell command
-- http_get/http_post: Make HTTP requests
+- write_file(path, content): Write content to a file. USE THIS when asked to create/save/write files.
+- read_file(path): Read a file's contents.
+- run_shell(command): Execute a shell command. USE THIS for compiling code, running programs, etc.
+- web_search(query): Search the web for information.
+- web_fetch(url): Fetch content from a URL.
+- list_directory(path): List directory contents.
 
-To use a tool, simply call it. The system will execute it and return the result.`
+Examples:
+- User: "Write a hello world C program" → Call write_file, then run_shell to compile
+- User: "Search for weather" → Call web_search
+- User: "Run this command" → Call run_shell
+
+ALWAYS use the tools to perform actions. The tools work and will execute your commands.`
 	messages = append(messages, llm.Message{
 		Role:    "system",
 		Content: toolsPrompt,
