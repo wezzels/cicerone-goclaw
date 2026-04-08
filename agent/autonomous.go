@@ -360,8 +360,8 @@ When creating files: use write_file (not run_shell with echo).`
 
 		// No tool calls - check if done
 		if resp.Content != "" {
-			// Check for completion marker
-			if strings.Contains(resp.Content, "TASK_COMPLETE") || strings.Contains(resp.Content, "complete") || strings.Contains(resp.Content, "done") {
+			// Only mark complete with explicit TASK_COMPLETE marker
+			if strings.Contains(resp.Content, "TASK_COMPLETE") {
 				result.Completed = true
 				result.FinalOutput = resp.Content
 				result.Steps = append(result.Steps, StepResult{
@@ -374,20 +374,15 @@ When creating files: use write_file (not run_shell with echo).`
 				return result, nil
 			}
 
-			// LLM responded without tools after executing tools - consider done
-			if len(result.Steps) > 0 {
-				result.Completed = true
-				result.FinalOutput = resp.Content
-				if onProgress != nil {
-					onProgress("Task completed!")
-				}
-				return result, nil
-			}
-
 			// LLM responded without tools - prompt for action
-			// Add a more forceful prompt to encourage tool use
 			messages = append(messages, llm.Message{Role: "assistant", Content: resp.Content})
-			messages = append(messages, llm.Message{Role: "user", Content: "You must CALL TOOLS to complete the task. Do NOT describe what to do. Use the tools NOW. For example, to create a file: call write_file with path and content parameters."})
+			if len(result.Steps) > 0 {
+				// Already executed some tools - ask for more
+				messages = append(messages, llm.Message{Role: "user", Content: "Continue with the remaining steps. Call the appropriate tools NOW."})
+			} else {
+				// No tools executed yet - prompt for first action
+				messages = append(messages, llm.Message{Role: "user", Content: "You must CALL TOOLS to complete the task. Use the tools NOW."})
+			}
 			continue
 		}
 
