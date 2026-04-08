@@ -24,10 +24,11 @@ var _ Provider = (*LlamaCPPProvider)(nil)
 
 // openAIChatRequest is OpenAI-compatible chat request.
 type openAIChatRequest struct {
-	Model    string    `json:"model"`
-	Messages []Message `json:"messages"`
-	Stream   bool      `json:"stream"`
-	MaxTokens int      `json:"max_tokens,omitempty"`
+	Model     string    `json:"model"`
+	Messages  []Message `json:"messages"`
+	Stream    bool      `json:"stream"`
+	MaxTokens int       `json:"max_tokens,omitempty"`
+	Tools     []Tool    `json:"tools,omitempty"`
 }
 
 // openAIChatResponse is OpenAI-compatible chat response.
@@ -111,6 +112,54 @@ func (p *LlamaCPPProvider) ChatStream(ctx context.Context, messages []Message) (
 	}
 
 	return p.streamChat(ctx, req)
+}
+
+// ChatWithTools sends a chat request with tools and returns the response.
+func (p *LlamaCPPProvider) ChatWithTools(ctx context.Context, messages []Message, tools []Tool) (*ChatResponse, error) {
+	req := openAIChatRequest{
+		Model:    p.config.Model,
+		Messages: messages,
+		Stream:   false,
+		Tools:    tools,
+	}
+
+	jsonBody, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("encoding request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", p.endpoint+"/v1/chat/completions", strings.NewReader(string(jsonBody)))
+	if err != nil {
+		return nil, fmt.Errorf("creating request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := p.client.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("unexpected status %s: %s", resp.Status, string(body))
+	}
+
+	var openAIResp openAIChatResponse
+	if err := json.NewDecoder(resp.Body).Decode(&openAIResp); err != nil {
+		return nil, fmt.Errorf("decoding response: %w", err)
+	}
+
+	if len(openAIResp.Choices) == 0 {
+		return nil, fmt.Errorf("no response choices")
+	}
+
+	result := &ChatResponse{
+		Content: openAIResp.Choices[0].Message.Content,
+		Done:    true,
+	}
+
+	return result, nil
 }
 
 func (p *LlamaCPPProvider) Models(ctx context.Context) ([]Model, error) {

@@ -34,6 +34,10 @@ type Provider interface {
 	// ChatStream sends a conversation and streams the response.
 	ChatStream(ctx context.Context, messages []Message) (<-chan StreamChunk, error)
 
+	// ChatWithTools sends a conversation with tools and returns the response.
+	// The response may contain tool calls that need to be executed.
+	ChatWithTools(ctx context.Context, messages []Message, tools []Tool) (*ChatResponse, error)
+
 	// Models returns available models.
 	Models(ctx context.Context) ([]Model, error)
 
@@ -48,6 +52,43 @@ type Provider interface {
 type Message struct {
 	Role    string `json:"role"`    // "system", "user", "assistant"
 	Content string `json:"content"`
+	// Tool calls for assistant messages (Ollama format)
+	ToolCalls []ToolCall `json:"tool_calls,omitempty"`
+	// Tool call ID for tool response messages
+	ToolCallID string `json:"tool_call_id,omitempty"`
+}
+
+// Tool represents a tool definition for function calling.
+type Tool struct {
+	Type     string      `json:"type"`     // "function"
+	Function ToolFunction `json:"function"`
+}
+
+// ToolFunction describes a function tool.
+type ToolFunction struct {
+	Name        string                 `json:"name"`
+	Description string                 `json:"description"`
+	Parameters  map[string]interface{} `json:"parameters"`
+}
+
+// ToolCall represents a tool call from the LLM.
+type ToolCall struct {
+	ID       string                 `json:"id"`
+	Type     string                 `json:"type"`     // "function"
+	Function ToolCallFunction        `json:"function"`
+}
+
+// ToolCallFunction contains the function name and arguments.
+type ToolCallFunction struct {
+	Name      string `json:"name"`
+	Arguments string `json:"arguments"` // JSON string
+}
+
+// ChatResponse is the response from ChatWithTools.
+type ChatResponse struct {
+	Content   string     `json:"content"`
+	ToolCalls []ToolCall `json:"tool_calls,omitempty"`
+	Done      bool       `json:"done"`
 }
 
 // Model represents an available LLM model.

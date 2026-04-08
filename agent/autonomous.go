@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/crab-meat-repos/cicerone-goclaw/llm"
 )
 
 // AutonomousAgent runs tasks autonomously with planning and iteration.
@@ -13,6 +15,7 @@ type AutonomousAgent struct {
 	executor  *Executor
 	agent     *Agent
 	maxSteps  int
+	toolDefs []llm.Tool
 }
 
 // TaskResult represents the result of autonomous task execution.
@@ -35,10 +38,29 @@ type StepResult struct {
 
 // NewAutonomousAgent creates a new autonomous agent.
 func NewAutonomousAgent(ag *Agent) *AutonomousAgent {
+	// Convert tool definitions to llm.Tool format
+	toolDefs := GetToolDefinitions()
+	tools := make([]llm.Tool, len(toolDefs))
+	for i, td := range toolDefs {
+		tools[i] = llm.Tool{
+			Type: "function",
+			Function: llm.ToolFunction{
+				Name:        td.Name,
+				Description: td.Description,
+				Parameters: map[string]interface{}{
+					"type":       "object",
+					"properties": td.Parameters,
+					"required":   td.Required,
+				},
+			},
+		}
+	}
+
 	return &AutonomousAgent{
-		executor: NewExecutor(ag),
-		agent:    ag,
-		maxSteps: 10,
+		executor:  NewExecutor(ag),
+		agent:     ag,
+		maxSteps:  10,
+		toolDefs:  tools,
 	}
 }
 
@@ -188,6 +210,139 @@ func (a *AutonomousAgent) extractFinalOutput(response string) string {
 	}
 	output := strings.TrimSpace(response[idx+len("TASK_COMPLETE"):])
 	return output
+}
+
+// ExecuteTaskWithTools runs a task using native LLM function calling.
+// This uses the provider's ChatWithTools method for structured tool calls.
+func (a *AutonomousAgent) ExecuteTaskWithTools(ctx context.Context, task string, onProgress func(string), provider llm.Provider) (*TaskResult, error) {
+	result := &TaskResult{
+		Task: task,
+	}
+
+	// System prompt for autonomous behavior
+	systemPrompt := `You are an autonomous agent with access to tools. Your job is to complete tasks by:
+1. Breaking down the task into steps
+2. Using tools to accomplish each step
+3. Evaluating results and iterating as needed
+4. Completing when the task is done
+
+When the task is complete, respond with a final message summarizing what was done.
+Be thorough but efficient. If a tool fails, try alternative approaches.
+
+Current working directory: ` + a.agent.WorkDir()
+
+	// Build messages
+	messages := []llm.Message{
+		{Role: "system", Content: systemPrompt},
+		{Role: "user", Content: fmt.Sprintf("Task: %s\n\nPlease complete this task. Break it down into steps and use tools as needed.", task)},
+	}
+
+	for step := 1; step <= a.maxSteps; step++ {
+		select {
+		case <-ctx.Done():
+			result.Error = ctx.Err()
+			return result, ctx.Err()
+		default:
+		}
+
+		if onProgress != nil {
+			onProgress(fmt.Sprintf("Step %d/%d: Planning...", step, a.maxSteps))
+		}
+
+		// Call LLM with tools
+		resp, err := provider.ChatWithTools(ctx, messages, a.toolDefs)
+		if err != nil {
+			result.Error = err
+			return result, err
+		}
+
+		// Check for tool calls
+		if len(resp.ToolCalls) > 0 {
+			// Execute tool calls
+			if onProgress != nil {
+				toolNames := make([]string, len(resp.ToolCalls))
+				for i, tc := range resp.ToolCalls {
+					toolNames[i] = tc.Function.Name
+				}
+				onProgress(fmt.Sprintf("Step %d: Executing %s", step, strings.Join(toolNames, ", ")))
+			}
+
+			// Convert tool calls to our format
+			toolCalls := make([]ToolCall, len(resp.ToolCalls))
+			for i, tc := range resp.ToolCalls {
+				var args map[string]interface{}
+				if tc.Function.Arguments != "" {
+					json.Unmarshal([]byte(tc.Function.Arguments), &args)
+				}
+				toolCalls[i] = ToolCall{
+					ID:        tc.ID,
+					Name:      tc.Function.Name,
+					Arguments: args,
+				}
+			}
+
+			// Execute tools
+			toolResults := a.executor.ExecuteTools(ctx, toolCalls)
+
+			stepResult := StepResult{
+				StepNumber:  step,
+				ToolCalls:   toolCalls,
+				ToolResults: toolResults,
+			}
+			result.Steps = append(result.Steps, stepResult)
+
+			// Add assistant message with tool calls
+			messages = append(messages, llm.Message{
+				Role:      "assistant",
+				Content:   resp.Content,
+				ToolCalls: resp.ToolCalls,
+			})
+
+			// Add tool results as separate messages
+			for _, tr := range toolResults {
+				resultJSON, _ := json.Marshal(map[string]interface{}{
+					"success": tr.Success,
+					"output":  tr.Output,
+				})
+				messages = append(messages, llm.Message{
+					Role:       "tool",
+					Content:    string(resultJSON),
+					ToolCallID: tr.Name, // Use tool name as ID
+				})
+			}
+			continue
+		}
+
+		// No tool calls - check if done
+		if resp.Content != "" {
+			// Check for completion marker
+			if strings.Contains(resp.Content, "TASK_COMPLETE") || strings.Contains(resp.Content, "complete") || strings.Contains(resp.Content, "done") {
+				result.Completed = true
+				result.FinalOutput = resp.Content
+				result.Steps = append(result.Steps, StepResult{
+					StepNumber: step,
+					Reasoning:  resp.Content,
+				})
+				if onProgress != nil {
+					onProgress("Task completed!")
+				}
+				return result, nil
+			}
+
+			// LLM responded without tools - prompt for action
+			messages = append(messages, llm.Message{Role: "assistant", Content: resp.Content})
+			messages = append(messages, llm.Message{Role: "user", Content: "You haven't used any tools. Please use the available tools to make progress on the task, or if the task is truly complete, say TASK_COMPLETE with a summary."})
+			continue
+		}
+
+		// No content and no tool calls
+		result.Error = fmt.Errorf("empty response from LLM")
+		return result, result.Error
+	}
+
+	// Max steps reached
+	result.Error = fmt.Errorf("maximum steps (%d) reached", a.maxSteps)
+	return result, nil
 }
 
 // buildSystemPrompt creates the system prompt with tools.

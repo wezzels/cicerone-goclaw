@@ -354,27 +354,18 @@ func runChat(cmd *cobra.Command, args []string) error {
 		case strings.HasPrefix(input, "/task "):
 			task := strings.TrimPrefix(input, "/task ")
 			fmt.Printf("\nStarting autonomous task: %s\n", task)
+			fmt.Println("Using native function calling for tool execution.")
 			fmt.Println("Press Ctrl+C to interrupt.")
 			fmt.Println()
-
-			// Chat function for autonomous agent
-			chatFn := func(ctx context.Context, msgs []agent.ChatMessage) (string, error) {
-				// Convert to llm.Message
-				llmMsgs := make([]llm.Message, len(msgs))
-				for i, m := range msgs {
-					llmMsgs[i] = llm.Message{Role: m.Role, Content: m.Content}
-				}
-				return provider.Chat(ctx, llmMsgs)
-			}
 
 			// Progress callback
 			onProgress := func(status string) {
 				fmt.Printf("[Agent] %s\n", status)
 			}
 
-			// Execute task
+			// Execute task with native function calling
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-			result, err := autoAgent.ExecuteTask(ctx, task, onProgress, chatFn)
+			result, err := autoAgent.ExecuteTaskWithTools(ctx, task, onProgress, provider)
 			cancel()
 
 			if err != nil {

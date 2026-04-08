@@ -42,6 +42,7 @@ type ollamaChatRequest struct {
 	Model    string    `json:"model"`
 	Messages []Message `json:"messages"`
 	Stream   bool      `json:"stream"`
+	Tools    []Tool    `json:"tools,omitempty"`
 }
 
 // ollamaChatResponse is the response from /api/chat.
@@ -114,6 +115,53 @@ func (p *OllamaProvider) ChatStream(ctx context.Context, messages []Message) (<-
 	}
 
 	return p.streamRequest(ctx, "/api/chat", req)
+}
+
+// ChatWithTools sends a chat request with tools and returns the response.
+// If tools are provided, the LLM may return tool calls instead of text.
+func (p *OllamaProvider) ChatWithTools(ctx context.Context, messages []Message, tools []Tool) (*ChatResponse, error) {
+	req := ollamaChatRequest{
+		Model:    p.config.Model,
+		Messages: messages,
+		Stream:   false,
+		Tools:    tools,
+	}
+
+	jsonBody, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("encoding request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", p.endpoint+"/api/chat", strings.NewReader(string(jsonBody)))
+	if err != nil {
+		return nil, fmt.Errorf("creating request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := p.client.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("unexpected status %s: %s", resp.Status, string(body))
+	}
+
+	// Parse response
+	var ollamaResp ollamaChatResponse
+	if err := json.NewDecoder(resp.Body).Decode(&ollamaResp); err != nil {
+		return nil, fmt.Errorf("decoding response: %w", err)
+	}
+
+	result := &ChatResponse{
+		Content:   ollamaResp.Message.Content,
+		Done:      true,
+		ToolCalls: ollamaResp.Message.ToolCalls,
+	}
+
+	return result, nil
 }
 
 func (p *OllamaProvider) Models(ctx context.Context) ([]Model, error) {
