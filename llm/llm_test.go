@@ -309,3 +309,111 @@ func TestStreamChunk(t *testing.T) {
 		t.Errorf("Expected 'test', got %s", chunk.Text)
 	}
 }
+
+func TestToolStructure(t *testing.T) {
+	tool := Tool{
+		Type: "function",
+		Function: ToolFunction{
+			Name:        "write_file",
+			Description: "Write content to a file",
+			Parameters: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"path": map[string]interface{}{
+						"type":        "string",
+						"description": "File path",
+					},
+				},
+				"required": []string{"path", "content"},
+			},
+		},
+	}
+
+	if tool.Type != "function" {
+		t.Errorf("Expected tool type 'function', got %s", tool.Type)
+	}
+	if tool.Function.Name != "write_file" {
+		t.Errorf("Expected function name 'write_file', got %s", tool.Function.Name)
+	}
+}
+
+func TestToolCallStructure(t *testing.T) {
+	tc := ToolCall{
+		ID:   "call-abc",
+		Type: "function",
+		Function: ToolCallFunction{
+			Name:      "read_file",
+			Arguments: `{"path": "test.txt"}`,
+		},
+	}
+
+	if tc.ID != "call-abc" {
+		t.Errorf("Expected ID 'call-abc', got %s", tc.ID)
+	}
+	if tc.Function.Name != "read_file" {
+		t.Errorf("Expected function name 'read_file', got %s", tc.Function.Name)
+	}
+}
+
+func TestChatResponseStructure(t *testing.T) {
+	resp := ChatResponse{
+		Content: "I've created the file for you.",
+		ToolCalls: []ToolCall{
+			{
+				ID:   "call-1",
+				Type: "function",
+				Function: ToolCallFunction{
+					Name:      "write_file",
+					Arguments: `{"path": "test.txt", "content": "hello"}`,
+				},
+			},
+		},
+		Done: true,
+	}
+
+	if resp.Content == "" {
+		t.Error("Expected non-empty content")
+	}
+	if len(resp.ToolCalls) != 1 {
+		t.Errorf("Expected 1 tool call, got %d", len(resp.ToolCalls))
+	}
+	if !resp.Done {
+		t.Error("Expected Done to be true")
+	}
+}
+
+func TestMessageWithToolCalls(t *testing.T) {
+	msg := Message{
+		Role:    "assistant",
+		Content: "I'll help you with that.",
+		ToolCalls: []ToolCall{
+			{
+				ID:       "call-123",
+				Type:     "function",
+				Function: ToolCallFunction{Name: "write_file", Arguments: `{"path": "test.txt"}`},
+			},
+		},
+	}
+
+	if len(msg.ToolCalls) != 1 {
+		t.Errorf("Expected 1 tool call, got %d", len(msg.ToolCalls))
+	}
+	if msg.ToolCalls[0].Function.Name != "write_file" {
+		t.Errorf("Expected function name 'write_file', got %s", msg.ToolCalls[0].Function.Name)
+	}
+}
+
+func TestMessageToolResponse(t *testing.T) {
+	msg := Message{
+		Role:       "tool",
+		Content:    `{"success": true, "output": "file created"}`,
+		ToolCallID: "call-123",
+	}
+
+	if msg.Role != "tool" {
+		t.Errorf("Expected role 'tool', got %s", msg.Role)
+	}
+	if msg.ToolCallID != "call-123" {
+		t.Errorf("Expected ToolCallID 'call-123', got %s", msg.ToolCallID)
+	}
+}

@@ -300,7 +300,8 @@ func runChat(cmd *cobra.Command, args []string) error {
 			parts := strings.SplitN(remaining, " ", 2)
 			if len(parts) < 1 {
 				fmt.Println("\nUsage: /write <file> <content>")
-				fmt.Println("       /write <file> (then enter content, Ctrl+D to save)\n")
+				fmt.Println("       /write <file> (then enter content, Ctrl+D to save)")
+				fmt.Println()
 				continue
 			}
 			filePath := parts[0]
@@ -325,7 +326,7 @@ func runChat(cmd *cobra.Command, args []string) error {
 		case strings.HasPrefix(input, "/append "):
 			parts := strings.SplitN(strings.TrimPrefix(input, "/append "), " ", 2)
 			if len(parts) < 2 {
-				fmt.Println("\nUsage: /append <file> <content>\n")
+				fmt.Println("\nUsage: /append <file> <content>")
 				continue
 			}
 			if err := ag.AppendFile(parts[0], parts[1]); err != nil {
