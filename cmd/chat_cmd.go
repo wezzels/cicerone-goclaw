@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -78,8 +79,18 @@ func runChat(cmd *cobra.Command, args []string) error {
 		baseURL = "http://localhost:11434"
 	}
 
-	// Get timeout
+	// Get timeout (handle both int and string formats)
 	timeout := viper.GetInt("llm.timeout")
+	if timeout == 0 {
+		// Try parsing as string in case it was quoted
+		timeoutStr := viper.GetString("llm.timeout")
+		if timeoutStr != "" {
+			t, err := strconv.Atoi(timeoutStr)
+			if err == nil {
+				timeout = t
+			}
+		}
+	}
 	if timeout == 0 {
 		timeout = 300 // 5 minutes for large models with tools
 	}
