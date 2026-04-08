@@ -232,8 +232,14 @@ func (a *AutonomousAgent) ExecuteTaskWithTools(ctx context.Context, task string,
 		Task: task,
 	}
 
-	// System prompt for autonomous behavior - keep it minimal to avoid confusing the LLM
-	systemPrompt := "Current working directory: " + a.agent.WorkDir()
+	// System prompt for autonomous behavior
+	systemPrompt := `Current working directory: ` + a.agent.WorkDir() + `
+
+You have access to tools. ALWAYS call tools using JSON format to accomplish tasks. Do NOT describe what you would do - actually CALL the tools.
+
+When creating files: use write_file (not run_shell with echo).`
+	// Note: The tools are provided via the tools parameter in ChatWithTools, so we keep the system prompt minimal
+	// to avoid confusing the LLM about how to call tools
 
 	// Build messages
 	messages := []llm.Message{
@@ -379,8 +385,9 @@ func (a *AutonomousAgent) ExecuteTaskWithTools(ctx context.Context, task string,
 			}
 
 			// LLM responded without tools - prompt for action
+			// Add a more forceful prompt to encourage tool use
 			messages = append(messages, llm.Message{Role: "assistant", Content: resp.Content})
-			messages = append(messages, llm.Message{Role: "user", Content: "Use the available tools to complete the task."})
+			messages = append(messages, llm.Message{Role: "user", Content: "You must CALL TOOLS to complete the task. Do NOT describe what to do. Use the tools NOW. For example, to create a file: call write_file with path and content parameters."})
 			continue
 		}
 
