@@ -38,21 +38,34 @@ type StepResult struct {
 
 // NewAutonomousAgent creates a new autonomous agent.
 func NewAutonomousAgent(ag *Agent) *AutonomousAgent {
-	// Convert tool definitions to llm.Tool format
-	toolDefs := GetToolDefinitions()
-	tools := make([]llm.Tool, len(toolDefs))
-	for i, td := range toolDefs {
-		tools[i] = llm.Tool{
-			Type: "function",
-			Function: llm.ToolFunction{
-				Name:        td.Name,
-				Description: td.Description,
-				Parameters: map[string]interface{}{
-					"type":       "object",
-					"properties": td.Parameters,
-					"required":   td.Required,
+	// Use only essential tools for autonomous agent to reduce confusion
+	esentialToolNames := map[string]bool{
+		"write_file":      true,
+		"read_file":       true,
+		"append_file":     true,
+		"run_shell":       true,
+		"create_directory": true,
+		"list_directory":  true,
+		"web_search":      true,
+		"web_fetch":       true,
+	}
+	
+	allTools := GetToolDefinitions()
+	var tools []llm.Tool
+	for _, td := range allTools {
+		if esentialToolNames[td.Name] {
+			tools = append(tools, llm.Tool{
+				Type: "function",
+				Function: llm.ToolFunction{
+					Name:        td.Name,
+					Description: td.Description,
+					Parameters: map[string]interface{}{
+						"type":       "object",
+						"properties": td.Parameters,
+						"required":   td.Required,
+					},
 				},
-			},
+			})
 		}
 	}
 
@@ -219,17 +232,8 @@ func (a *AutonomousAgent) ExecuteTaskWithTools(ctx context.Context, task string,
 		Task: task,
 	}
 
-	// System prompt for autonomous behavior
-	systemPrompt := `You are an autonomous agent. You MUST use the provided tools to complete tasks.
-
-When you receive a task:
-1. Call the appropriate tool immediately
-2. Do NOT describe what you will do - actually call the tool
-3. Wait for results and continue if needed
-
-Available tools: write_file, read_file, run_shell, web_search, web_fetch
-
-Current working directory: ` + a.agent.WorkDir()
+	// System prompt for autonomous behavior - keep it minimal to avoid confusing the LLM
+	systemPrompt := "Current working directory: " + a.agent.WorkDir()
 
 	// Build messages
 	messages := []llm.Message{
@@ -253,6 +257,9 @@ Current working directory: ` + a.agent.WorkDir()
 		resp, err := provider.ChatWithTools(ctx, messages, a.toolDefs)
 		if err != nil {
 			result.Error = err
+			if onProgress != nil {
+				onProgress(fmt.Sprintf("Error calling LLM: %v", err))
+			}
 			return result, err
 		}
 
@@ -313,23 +320,19 @@ Current working directory: ` + a.agent.WorkDir()
 				ToolCalls: resp.ToolCalls,
 			})
 
-			// Add tool results as separate messages
+			// Add tool results as tool role messages (Ollama format)
 			for i, tr := range toolResults {
-				resultJSON, _ := json.Marshal(map[string]interface{}{
-					"success": tr.Success,
-					"output":  tr.Output,
-				})
-				// Use the corresponding tool call ID
-				toolCallID := ""
-				if i < len(toolCalls) {
-					toolCallID = toolCalls[i].ID
+				// Ollama expects tool responses with role "tool" and the content as plain text
+				toolResultContent := tr.Output
+				if !tr.Success {
+					toolResultContent = fmt.Sprintf("Error: %v", tr.Error)
 				}
-				if toolCallID == "" {
-					toolCallID = tr.Name // Fallback to tool name
-				}
+
+				// Use tool call ID from the original call (Ollama format)
+				toolCallID := toolCalls[i].ID
 				messages = append(messages, llm.Message{
 					Role:       "tool",
-					Content:    string(resultJSON),
+					Content:    toolResultContent,
 					ToolCallID: toolCallID,
 				})
 			}
@@ -352,15 +355,32 @@ Current working directory: ` + a.agent.WorkDir()
 				return result, nil
 			}
 
+			// LLM responded without tools after executing tools - consider done
+			if len(result.Steps) > 0 {
+				result.Completed = true
+				result.FinalOutput = resp.Content
+				if onProgress != nil {
+					onProgress("Task completed!")
+				}
+				return result, nil
+			}
+
 			// LLM responded without tools - prompt for action
 			messages = append(messages, llm.Message{Role: "assistant", Content: resp.Content})
-			messages = append(messages, llm.Message{Role: "user", Content: "You haven't used any tools. Please use the available tools to make progress on the task, or if the task is truly complete, say TASK_COMPLETE with a summary."})
+			messages = append(messages, llm.Message{Role: "user", Content: "Use the available tools to complete the task."})
 			continue
 		}
 
+		// No content and no tool calls after tools executed - consider done
+		if len(result.Steps) > 0 {
+			result.Completed = true
+			result.FinalOutput = "Task completed"
+			return result, nil
+		}
+
 		// No content and no tool calls
-		result.Error = fmt.Errorf("empty response from LLM")
-		return result, result.Error
+			result.Error = fmt.Errorf("empty response from LLM")
+			return result, result.Error
 	}
 
 	// Max steps reached
