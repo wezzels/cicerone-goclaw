@@ -17,6 +17,8 @@ go build -o cicerone .
 make build
 ```
 
+**Note:** Use `.` not `./cmd`. Building `./cmd` creates an archive, not an executable.
+
 ## Available Make Targets
 
 | Target | Description |
