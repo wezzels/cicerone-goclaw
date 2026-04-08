@@ -102,4 +102,68 @@ llm:
 
 ---
 
-*Last updated: 2026-04-08 20:00 UTC*
+*Last updated: 2026-04-08 20:42 UTC*
+
+## Coding Challenge Results
+
+See `agent/PROMPT_EVOLUTION.md` for detailed prompt evolution and fixes.
+
+### Challenge 1: Project Scaffold
+
+**Task:** Create a Python project structure with `src/__init__.py`, `src/main.py`
+
+| Machine | Model | Status | Time | Notes |
+|---------|-------|--------|------|-------|
+| thing1 | mistral:latest | ✅ Pass | ~50s | Creates structure correctly |
+| darth | llama3.1:8b | ✅ Pass | ~3s | Faster execution |
+
+**Verification:**
+```bash
+$ ls /tmp/myproject/src/
+__init__.py  main.py
+$ python3 /tmp/myproject/src/main.py
+Hello World
+```
+
+### Challenge 2: Data Processing
+
+**Task:** Create numbers.txt with data, create sum.py, run it
+
+| Machine | Model | Status | Time | Notes |
+|---------|-------|--------|------|-------|
+| thing1 | mistral:latest | ⚠️ Partial | 120s | Creates files but times out |
+| darth | llama3.1:8b | ✅ Pass | ~5s | Full workflow works |
+
+**Verification (darth):**
+```bash
+$ cat /tmp/numbers.txt
+10
+20
+30
+40
+50
+$ python3 /tmp/sum.py
+150
+```
+
+### Challenge 3: Python Script Creation
+
+**Task:** Create and run a Python script
+
+| Machine | Model | Status | Time | Notes |
+|---------|-------|--------|------|-------|
+| thing1 | mistral:latest | ✅ Pass | ~63s | Creates and runs correctly |
+| darth | llama3.1:8b | ✅ Pass | ~2s | Fast execution |
+
+### Challenge 4: Git Project
+
+**Task:** Initialize git repo, create files, commit
+
+| Machine | Model | Status | Time | Notes |
+|---------|-------|--------|------|-------|
+| thing1 | mistral:latest | ⏱️ Timeout | 120s | Not completed |
+| darth | llama3.1:8b | Not tested | - | - |
+
+---
+
+*Last updated: 2026-04-08 20:42 UTC*
