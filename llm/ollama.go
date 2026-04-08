@@ -95,7 +95,7 @@ func (p *OllamaProvider) GenerateStream(ctx context.Context, prompt string) (<-c
 	// Get optimal context size if not specified
 	contextSize := p.config.ContextSize
 	if contextSize == 0 {
-		contextSize = GetOptimalContextSize()
+		contextSize = p.GetMaxContext(ctx)
 	}
 
 	req := ollamaGenerateRequest{
@@ -114,7 +114,7 @@ func (p *OllamaProvider) Chat(ctx context.Context, messages []Message) (string, 
 	// Get optimal context size if not specified
 	contextSize := p.config.ContextSize
 	if contextSize == 0 {
-		contextSize = GetOptimalContextSize()
+		contextSize = p.GetMaxContext(ctx)
 	}
 
 	req := ollamaChatRequest{
@@ -160,7 +160,7 @@ func (p *OllamaProvider) ChatStream(ctx context.Context, messages []Message) (<-
 	// Get optimal context size if not specified
 	contextSize := p.config.ContextSize
 	if contextSize == 0 {
-		contextSize = GetOptimalContextSize()
+		contextSize = p.GetMaxContext(ctx)
 	}
 
 	req := ollamaChatRequest{
@@ -181,7 +181,8 @@ func (p *OllamaProvider) ChatWithTools(ctx context.Context, messages []Message, 
 	// Get optimal context size if not specified
 	contextSize := p.config.ContextSize
 	if contextSize == 0 {
-		contextSize = GetOptimalContextSize()
+		// Try to get model-aware context limit
+		contextSize = p.GetMaxContext(ctx)
 	}
 
 	req := ollamaChatRequest{
@@ -262,6 +263,94 @@ func (p *OllamaProvider) Models(ctx context.Context) ([]Model, error) {
 	}
 
 	return models, nil
+}
+
+// ModelInfo contains detailed model information.
+type ModelInfo struct {
+	Name           string         `json:"name"`
+	ParameterCount string         `json:"parameter_count"`
+	ContextLength  int            `json:"context_length"`
+	Capabilities   []string       `json:"capabilities"`
+	Details        map[string]interface{} `json:"details"`
+}
+
+// GetModelInfo fetches detailed model information including max context.
+func (p *OllamaProvider) GetModelInfo(ctx context.Context, model string) (*ModelInfo, error) {
+	reqBody := map[string]string{"name": model}
+	jsonBody, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("encoding request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", p.endpoint+"/api/show", strings.NewReader(string(jsonBody)))
+	if err != nil {
+		return nil, fmt.Errorf("creating request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := p.client.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("unexpected status %s: %s", resp.Status, string(body))
+	}
+
+	var result struct {
+		License    string                 `json:"license"`
+		Modelfile  string                 `json:"modelfile"`
+		Parameters string                 `json:"parameters"`
+		Template   string                 `json:"template"`
+		Details    map[string]interface{} `json:"details"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decoding response: %w", err)
+	}
+
+	info := &ModelInfo{
+		Name:     model,
+		Details:  result.Details,
+	}
+
+	// Parse context length from parameters or details
+	// Most models default to 2048 or 4096, but some support much larger
+	// Common context lengths: 2048, 4096, 8192, 16384, 32768, 65536, 131072
+	if ctxLen, ok := result.Details["context_length"].(float64); ok {
+		info.ContextLength = int(ctxLen)
+	}
+	if paramCount, ok := result.Details["parameter_size"].(string); ok {
+		info.ParameterCount = paramCount
+	}
+
+	return info, nil
+}
+
+// GetMaxContext returns the maximum safe context for the model,
+// limited by both model capabilities and available memory.
+func (p *OllamaProvider) GetMaxContext(ctx context.Context) int {
+	// Get model info
+	info, err := p.GetModelInfo(ctx, p.config.Model)
+	if err != nil {
+		// Fall back to memory-based calculation
+		return GetOptimalContextSize()
+	}
+
+	// Get memory-based limit
+	memLimit := GetOptimalContextSize()
+
+	// If model specifies context length, use the smaller of model max and memory limit
+	if info.ContextLength > 0 {
+		if memLimit < info.ContextLength {
+			return memLimit // Memory is the limiting factor
+		}
+		return info.ContextLength // Model is the limiting factor
+	}
+
+	// No model context info, use memory limit
+	return memLimit
 }
 
 func (p *OllamaProvider) IsRunning(ctx context.Context) bool {
