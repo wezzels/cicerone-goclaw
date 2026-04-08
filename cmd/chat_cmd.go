@@ -3,6 +3,7 @@ package cmd
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -116,7 +117,8 @@ func runChat(cmd *cobra.Command, args []string) error {
 	// Create autonomous agent
 	autoAgent := agent.NewAutonomousAgent(ag)
 
-	stream, _ := cmd.Flags().GetBool("stream")
+	// stream flag deprecated - we use ChatWithTools now for automatic tool calling
+	_, _ = cmd.Flags().GetBool("stream")
 
 	fmt.Printf("Connected to LLM at %s\n", baseURL)
 	fmt.Printf("Model: %s\n", model)
@@ -135,6 +137,23 @@ func runChat(cmd *cobra.Command, args []string) error {
 			Content: systemPrompt,
 		})
 	}
+
+	// Add tools system prompt
+	toolsPrompt := `You have access to tools that you can call to help the user. When the user asks you to do something that requires external data or actions, use the appropriate tool.
+
+Available tools:
+- web_search: Search the web for information (use for "search for X", "look up X")
+- web_fetch: Fetch content from a URL (use for "get content from URL")
+- write_file: Write content to a file
+- read_file: Read a file
+- run_shell: Execute a shell command
+- http_get/http_post: Make HTTP requests
+
+To use a tool, simply call it. The system will execute it and return the result.`
+	messages = append(messages, llm.Message{
+		Role:    "system",
+		Content: toolsPrompt,
+	})
 
 	for {
 		fmt.Print("You: ")
@@ -417,31 +436,104 @@ func runChat(cmd *cobra.Command, args []string) error {
 
 		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
 
-		var response string
-		var respErr error
-
-		if stream {
-			response, respErr = streamChat(ctx, provider, messages)
-		} else {
-			response, respErr = provider.Chat(ctx, messages)
-			fmt.Print(response)
-		}
+		// Use ChatWithTools to allow tool calling
+		toolDefs := agent.ToolsToOllamaFormat()
+		resp, err := provider.ChatWithTools(ctx, messages, toolDefs)
 		cancel()
 
-		if respErr != nil {
-			fmt.Printf("\nError: %v\n\n", respErr)
-			// Remove failed message
+		if err != nil {
+			fmt.Printf("\nError: %v\n\n", err)
 			messages = messages[:len(messages)-1]
 			continue
 		}
 
-		fmt.Println()
+		// Display any text response
+		if resp.Content != "" {
+			fmt.Print(resp.Content)
+		}
 
 		// Add assistant response to history
 		messages = append(messages, llm.Message{
 			Role:    "assistant",
-			Content: response,
+			Content: resp.Content,
+			ToolCalls: resp.ToolCalls,
 		})
+
+		// If LLM made tool calls, execute them and continue conversation
+		if len(resp.ToolCalls) > 0 {
+			fmt.Print("\n\n[Executing tools...]\n")
+
+			// Execute each tool call
+			for _, tc := range resp.ToolCalls {
+				fmt.Printf("  - %s\n", tc.Function.Name)
+			}
+			fmt.Println()
+
+			// Convert tool calls to agent format and execute
+			toolCalls := make([]agent.ToolCall, len(resp.ToolCalls))
+			for i, tc := range resp.ToolCalls {
+				var args map[string]interface{}
+				if tc.Function.Arguments != "" {
+					json.Unmarshal([]byte(tc.Function.Arguments), &args)
+				}
+				toolCalls[i] = agent.ToolCall{
+					ID:        tc.ID,
+					Name:      tc.Function.Name,
+					Arguments: args,
+				}
+			}
+
+			// Execute tools
+			exec := agent.NewExecutor(ag)
+			results := exec.ExecuteTools(context.Background(), toolCalls)
+
+			// Display results
+			for _, r := range results {
+				if r.Success {
+					fmt.Printf("[Result: %s]\n", r.Name)
+					// Truncate long output
+					output := r.Output
+					if len(output) > 500 {
+						output = output[:500] + "..."
+					}
+					fmt.Println(output)
+				} else {
+					fmt.Printf("[Error: %s] %v\n", r.Name, r.Error)
+				}
+			}
+
+			// Add tool results to messages
+			for _, r := range results {
+				resultJSON, _ := json.Marshal(map[string]interface{}{
+					"success": r.Success,
+					"output":  r.Output,
+				})
+				messages = append(messages, llm.Message{
+					Role:       "tool",
+					Content:    string(resultJSON),
+					ToolCallID: r.Name,
+				})
+			}
+
+			// Get follow-up response from LLM
+			fmt.Print("\nAssistant: ")
+			ctx2, cancel2 := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
+			followUp, err := provider.Chat(ctx2, messages)
+			cancel2()
+
+			if err != nil {
+				fmt.Printf("\nError: %v\n\n", err)
+				continue
+			}
+
+			fmt.Println(followUp)
+			messages = append(messages, llm.Message{
+				Role:    "assistant",
+				Content: followUp,
+			})
+		} else {
+			fmt.Println()
+		}
 	}
 }
 

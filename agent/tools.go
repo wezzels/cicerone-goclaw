@@ -3,6 +3,8 @@ package agent
 
 import (
 	"encoding/json"
+
+	"github.com/crab-meat-repos/cicerone-goclaw/llm"
 )
 
 // ToolDefinition describes a tool the LLM can call.
@@ -206,6 +208,29 @@ func GetToolDefinitions() []ToolDefinition {
 	}
 }
 
+// ToolsToOllamaFormat converts tools to Ollama's tool format.
+func ToolsToOllamaFormat() []llm.Tool {
+	tools := GetToolDefinitions()
+	result := make([]llm.Tool, len(tools))
+
+	for i, tool := range tools {
+		result[i] = llm.Tool{
+			Type: "function",
+			Function: llm.ToolFunction{
+				Name:        tool.Name,
+				Description: tool.Description,
+				Parameters: map[string]interface{}{
+					"type":       "object",
+					"properties": tool.Parameters,
+					"required":   tool.Required,
+				},
+			},
+		}
+	}
+
+	return result
+}
+
 // ToolsToJSON converts tool definitions to JSON for LLM context.
 func ToolsToJSON() (string, error) {
 	tools := GetToolDefinitions()
@@ -216,29 +241,3 @@ func ToolsToJSON() (string, error) {
 	return string(data), nil
 }
 
-// ToolsToOllamaFormat converts tools to Ollama's tool format.
-func ToolsToOllamaFormat() []map[string]interface{} {
-	tools := GetToolDefinitions()
-	result := make([]map[string]interface{}, len(tools))
-
-	for i, tool := range tools {
-		params := map[string]interface{}{
-			"type":       "object",
-			"properties": tool.Parameters,
-		}
-		if len(tool.Required) > 0 {
-			params["required"] = tool.Required
-		}
-
-		result[i] = map[string]interface{}{
-			"type": "function",
-			"function": map[string]interface{}{
-				"name":        tool.Name,
-				"description": tool.Description,
-				"parameters":  params,
-			},
-		}
-	}
-
-	return result
-}
