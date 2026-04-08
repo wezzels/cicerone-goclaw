@@ -1,0 +1,112 @@
+# GitLab CI Configuration for cicerone-goclaw
+
+stages:
+  - test
+  - build
+  - deploy
+
+variables:
+  GO_VERSION: "1.23"
+
+.test_template: &test_template
+  image: golang:${GO_VERSION}
+  before_script:
+    - go mod download
+  script:
+    - go test -v -short ./...
+  allow_failure: false
+
+# Unit tests
+unit_tests:
+  <<: *test_template
+  stage: test
+  tags:
+    - docker
+  script:
+    - go test -v -short -cover ./...
+  coverage: '/coverage: \d+.\d+% of statements/'
+  artifacts:
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+
+# Integration tests (requires Ollama)
+integration_tests:
+  <<: *test_template
+  stage: test
+  tags:
+    - docker
+  script:
+    - go test -v -tags=integration ./...
+  allow_failure: true  # Ollama may not be available
+
+# E2E tests
+e2e_tests:
+  image: golang:${GO_VERSION}
+  stage: test
+  tags:
+    - docker
+  before_script:
+    - go mod download
+    - curl -fsSL https://ollama.com/install.sh | sh || true
+    - ollama serve &
+    - sleep 10
+    - ollama pull gemma3:12b || true
+  script:
+    - go build -o cicerone ./cmd
+    - go test -v -tags=e2e ./tests/...
+  after_script:
+    - pkill ollama || true
+  allow_failure: true  # E2E may fail without proper setup
+
+# Build for multiple platforms
+build_linux:
+  image: golang:${GO_VERSION}
+  stage: build
+  tags:
+    - docker
+  script:
+    - GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o cicerone-linux-amd64 ./cmd
+    - GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o cicerone-linux-arm64 ./cmd
+  artifacts:
+    paths:
+      - cicerone-linux-amd64
+      - cicerone-linux-arm64
+    expire_in: 1 week
+
+build_darwin:
+  image: golang:${GO_VERSION}
+  stage: build
+  tags:
+    - docker
+  script:
+    - GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o cicerone-darwin-amd64 ./cmd
+    - GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o cicerone-darwin-arm64 ./cmd
+  artifacts:
+    paths:
+      - cicerone-darwin-amd64
+      - cicerone-darwin-arm64
+    expire_in: 1 week
+
+# Code quality checks
+lint:
+  image: golangci/golangci-lint:latest
+  stage: test
+  tags:
+    - docker
+  script:
+    - golangci-lint run --timeout 5m ./...
+  allow_failure: true
+
+# Security scan
+security:
+  image: golang:${GO_VERSION}
+  stage: test
+  tags:
+    - docker
+  before_script:
+    - go install github.com/securego/gosec/v2/cmd/gosec@latest
+  script:
+    - gosec ./...
+  allow_failure: true
