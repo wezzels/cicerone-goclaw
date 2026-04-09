@@ -122,7 +122,10 @@ func runChat(cmd *cobra.Command, args []string) error {
 	webProvider := web.NewDuckDuckGoProvider()
 
 	// Create agent for command execution
-	workDir, _ := os.Getwd()
+	workDir := viper.GetString("workspace.path")
+	if workDir == "" {
+		workDir, _ = os.Getwd()
+	}
 	ag := agent.New(workDir)
 
 	// Create autonomous agent

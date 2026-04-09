@@ -57,6 +57,7 @@ func runConfigShow(cmd *cobra.Command, args []string) error {
 		"llm.base_url",
 		"llm.model",
 		"llm.timeout",
+		"workspace.path",
 		"gateway.listen",
 	}
 
