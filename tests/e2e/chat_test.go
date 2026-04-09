@@ -12,6 +12,40 @@ import (
 	"time"
 )
 
+// getRepoRoot returns the repository root directory
+func getRepoRoot(t *testing.T) string {
+	// Get current working directory (should be tests/e2e)
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Failed to get working directory: %v", err)
+	}
+	// Navigate up to repo root
+	repoRoot := filepath.Dir(filepath.Dir(cwd))
+	return repoRoot
+}
+
+// buildBinary builds the cicerone binary and returns its path
+func buildBinary(t *testing.T) string {
+	repoRoot := getRepoRoot(t)
+	binary := filepath.Join(t.TempDir(), "cicerone-test")
+
+	buildCmd := exec.Command("go", "build", "-o", binary, ".")
+	buildCmd.Dir = repoRoot
+	buildCmd.Env = append(os.Environ(), "CGO_ENABLED=0")
+
+	output, err := buildCmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("Failed to build: %v\n%s", err, output)
+	}
+
+	// Make binary executable
+	if err := os.Chmod(binary, 0755); err != nil {
+		t.Fatalf("Failed to chmod: %v", err)
+	}
+
+	return binary
+}
+
 // TestChatCommand tests the chat command end-to-end
 // Requires: cicerone binary built and ollama running
 func TestChatCommand(t *testing.T) {
@@ -28,12 +62,7 @@ func TestChatCommand(t *testing.T) {
 		t.Skip("Ollama not running, skipping e2e test")
 	}
 
-	// Build binary
-	binary := filepath.Join(t.TempDir(), "cicerone-test")
-	buildCmd := exec.Command("go", "build", "-o", binary, "../cmd")
-	if err := buildCmd.Run(); err != nil {
-		t.Fatalf("Failed to build: %v", err)
-	}
+	binary := buildBinary(t)
 
 	t.Run("startup", func(t *testing.T) {
 		cmd := exec.Command(binary, "chat", "--help")
@@ -41,7 +70,7 @@ func TestChatCommand(t *testing.T) {
 		if err != nil {
 			t.Fatalf("chat --help failed: %v\n%s", err, output)
 		}
-		if !strings.Contains(string(output), "Interactive LLM chat") {
+		if !strings.Contains(string(output), "Start an interactive chat") {
 			t.Errorf("Expected help text, got: %s", output)
 		}
 	})
@@ -54,13 +83,7 @@ func TestAgentCommands(t *testing.T) {
 	}
 
 	tmpDir := t.TempDir()
-
-	// Create test binary
-	binary := filepath.Join(t.TempDir(), "cicerone-test")
-	buildCmd := exec.Command("go", "build", "-o", binary, "../cmd")
-	if err := buildCmd.Run(); err != nil {
-		t.Fatalf("Failed to build: %v", err)
-	}
+	binary := buildBinary(t)
 
 	// Test /run command
 	t.Run("run_command", func(t *testing.T) {
@@ -133,13 +156,7 @@ func TestTaskCommand(t *testing.T) {
 	}
 
 	tmpDir := t.TempDir()
-
-	// Build binary
-	binary := filepath.Join(t.TempDir(), "cicerone-test")
-	buildCmd := exec.Command("go", "build", "-o", binary, "../cmd")
-	if err := buildCmd.Run(); err != nil {
-		t.Fatalf("Failed to build: %v", err)
-	}
+	binary := buildBinary(t)
 
 	// Test /task with simple file creation
 	t.Run("simple_task", func(t *testing.T) {
