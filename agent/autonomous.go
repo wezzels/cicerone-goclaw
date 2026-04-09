@@ -72,7 +72,7 @@ func NewAutonomousAgent(ag *Agent) *AutonomousAgent {
 	return &AutonomousAgent{
 		executor:  NewExecutor(ag),
 		agent:     ag,
-		maxSteps:  10,
+		maxSteps:  20, // Increased for multi-step tasks like creating Docker apps
 		toolDefs:  tools,
 	}
 }
@@ -288,19 +288,12 @@ IMPORTANT: All file operations are sandboxed to the working directory.
 			}
 		}
 
-		// Check for tool calls
+		// Check for tool calls (native or embedded in content)
+		var toolCalls []ToolCall
+		
+		// First, check native tool calls
 		if len(resp.ToolCalls) > 0 {
-			// Execute tool calls
-			if onProgress != nil {
-				toolNames := make([]string, len(resp.ToolCalls))
-				for i, tc := range resp.ToolCalls {
-					toolNames[i] = tc.Function.Name
-				}
-				onProgress(fmt.Sprintf("Step %d: Executing %s", step, strings.Join(toolNames, ", ")))
-			}
-
-			// Convert tool calls to our format
-			toolCalls := make([]ToolCall, len(resp.ToolCalls))
+			toolCalls = make([]ToolCall, len(resp.ToolCalls))
 			for i, tc := range resp.ToolCalls {
 				var args map[string]interface{}
 				if tc.Function.Arguments != "" {
@@ -311,6 +304,26 @@ IMPORTANT: All file operations are sandboxed to the working directory.
 					Name:      tc.Function.Name,
 					Arguments: args,
 				}
+			}
+		} else if resp.Content != "" {
+			// Try to parse embedded tool calls from content
+			parsedCalls, err := ParseToolCalls(resp.Content)
+			if err == nil && len(parsedCalls) > 0 {
+				if onProgress != nil {
+					onProgress(fmt.Sprintf("Step %d: Parsed embedded tool calls from content", step))
+				}
+				toolCalls = parsedCalls
+			}
+		}
+		
+		if len(toolCalls) > 0 {
+			// Execute tool calls
+			if onProgress != nil {
+				toolNames := make([]string, len(toolCalls))
+				for i, tc := range toolCalls {
+					toolNames[i] = tc.Name
+				}
+				onProgress(fmt.Sprintf("Step %d: Executing %s", step, strings.Join(toolNames, ", ")))
 			}
 
 			// Execute tools
@@ -325,16 +338,21 @@ IMPORTANT: All file operations are sandboxed to the working directory.
 
 			// Add assistant message with tool calls
 			// Ensure type is set correctly for Ollama
-			toolCallsForMessage := make([]llm.ToolCall, len(resp.ToolCalls))
-			for i, tc := range resp.ToolCalls {
+			toolCallsForMessage := make([]llm.ToolCall, len(toolCalls))
+			for i, tc := range toolCalls {
 				toolCallsForMessage[i] = llm.ToolCall{
 					ID:   tc.ID,
 					Type: "function", // Must be set for Ollama
 					Function: llm.ToolCallFunction{
-						Name:         tc.Function.Name,
-						Arguments:    tc.Function.Arguments,
-						RawArguments: tc.Function.RawArguments, // Must be set for marshaling
+						Name:         tc.Name,
+						Arguments:    "",
+						RawArguments: tc.Arguments, // Must be set for marshaling
 					},
+				}
+				// Marshal arguments to JSON string if present
+				if tc.Arguments != nil {
+					data, _ := json.Marshal(tc.Arguments)
+					toolCallsForMessage[i].Function.Arguments = string(data)
 				}
 			}
 			messages = append(messages, llm.Message{
@@ -366,6 +384,33 @@ IMPORTANT: All file operations are sandboxed to the working directory.
 		if resp.Content != "" {
 			// Only mark complete with explicit TASK_COMPLETE marker
 			if strings.Contains(resp.Content, "TASK_COMPLETE") {
+				result.Completed = true
+				result.FinalOutput = resp.Content
+				result.Steps = append(result.Steps, StepResult{
+					StepNumber: step,
+					Reasoning:  resp.Content,
+				})
+				if onProgress != nil {
+					onProgress("Task completed!")
+				}
+				return result, nil
+			}
+
+			// Check if task appears complete based on context
+			completedIndicators := []string{"has been created", "has been written", "successfully created", "file created", "task complete", "finished", "done"}
+			respLower := strings.ToLower(resp.Content)
+			taskComplete := false
+			for _, indicator := range completedIndicators {
+				if strings.Contains(respLower, indicator) {
+					// Check it's not about ongoing work
+					if !strings.Contains(respLower, "creating") && !strings.Contains(respLower, "writing") {
+						taskComplete = true
+						break
+					}
+				}
+			}
+			
+			if taskComplete && len(result.Steps) > 0 {
 				result.Completed = true
 				result.FinalOutput = resp.Content
 				result.Steps = append(result.Steps, StepResult{
