@@ -260,11 +260,30 @@ func (a *Agent) ResolvePath(path string) string {
 }
 
 // resolvePath resolves a path relative to workdir.
+// Absolute paths are rejected to sandbox file operations.
 func (a *Agent) resolvePath(path string) string {
-	if filepath.IsAbs(path) {
-		return path
+	// Clean the path to prevent traversal attacks
+	cleanPath := filepath.Clean(path)
+	
+	// Reject absolute paths - force everything into workdir
+	if filepath.IsAbs(cleanPath) {
+		// Strip leading slashes and use as relative to workdir
+		cleanPath = strings.TrimPrefix(cleanPath, "/")
 	}
-	return filepath.Join(a.workDir, path)
+	
+	// Join with workdir
+	fullPath := filepath.Join(a.workDir, cleanPath)
+	
+	// Ensure the resolved path is still within workdir (prevent ../ traversal)
+	absWork, _ := filepath.Abs(a.workDir)
+	absFull, _ := filepath.Abs(fullPath)
+	
+	// If resolved path escapes workdir, force it back
+	if !strings.HasPrefix(absFull, absWork) {
+		return filepath.Join(a.workDir, filepath.Base(cleanPath))
+	}
+	
+	return fullPath
 }
 
 // registerCommands registers built-in commands.

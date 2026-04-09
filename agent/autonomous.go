@@ -237,7 +237,11 @@ func (a *AutonomousAgent) ExecuteTaskWithTools(ctx context.Context, task string,
 
 You have access to tools. ALWAYS call tools using JSON format to accomplish tasks. Do NOT describe what you would do - actually CALL the tools.
 
-When creating files: use write_file (not run_shell with echo).`
+IMPORTANT: All file operations are sandboxed to the working directory.
+- Use RELATIVE paths (e.g., "app.py" not "/app/app.py")
+- Absolute paths like "/app" will be redirected to the working directory
+- When creating files: use write_file (not run_shell with echo)
+- When running docker: mount current directory if needed (e.g., -v $(pwd):/app)`
 	// Note: The tools are provided via the tools parameter in ChatWithTools, so we keep the system prompt minimal
 	// to avoid confusing the LLM about how to call tools
 

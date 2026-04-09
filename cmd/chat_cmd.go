@@ -157,6 +157,11 @@ func runChat(cmd *cobra.Command, args []string) error {
 
 IMPORTANT: Do NOT just describe what you would do. You MUST actually call the tools to execute the requested actions. The tools are real and will be executed.
 
+IMPORTANT: All file operations are sandboxed to the working directory.
+- Use RELATIVE paths (e.g., "app.py" not "/app/app.py")
+- Absolute paths will be redirected to the working directory
+- When running docker: mount current directory if needed (e.g., -v $(pwd):/app)
+
 Available tools:
 - write_file(path, content): Write content to a file. USE THIS when asked to create/save/write files.
 - read_file(path): Read a file's contents.
