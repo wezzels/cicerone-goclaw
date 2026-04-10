@@ -108,7 +108,9 @@ func findCiceroneProcess() (int, error) {
 	}
 
 	var pidInt int
-	fmt.Sscanf(pid, "%d", &pidInt)
+	if _, err := fmt.Sscanf(pid, "%d", &pidInt); err != nil {
+		return 0, fmt.Errorf("invalid pid: %s", pid)
+	}
 	return pidInt, nil
 }
 
@@ -161,7 +163,9 @@ func getProcessInfo(pid int) (string, error) {
 	}
 
 	var secs int
-	fmt.Sscanf(seconds, "%d", &secs)
+	if _, err := fmt.Sscanf(seconds, "%d", &secs); err != nil {
+		return "", fmt.Errorf("invalid duration: %s", seconds)
+	}
 	duration := time.Duration(secs) * time.Second
 
 	return duration.String(), nil

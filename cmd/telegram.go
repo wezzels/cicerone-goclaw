@@ -34,7 +34,7 @@ func init() {
 	telegramCmd.Flags().String("token", "", "Telegram bot token (overrides config)")
 	telegramCmd.Flags().Bool("debug", false, "Enable debug logging")
 
-	viper.BindPFlag("telegram.bot_token", telegramCmd.Flags().Lookup("token"))
+	_ = viper.BindPFlag("telegram.bot_token", telegramCmd.Flags().Lookup("token"))
 }
 
 func runTelegram(cmd *cobra.Command, args []string) error {

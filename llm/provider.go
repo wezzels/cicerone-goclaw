@@ -93,7 +93,7 @@ func (tcf *ToolCallFunction) UnmarshalJSON(data []byte) error {
 		tcf.Name = alias.Name
 		tcf.Arguments = alias.Arguments
 		// Parse into RawArguments too for marshaling
-		json.Unmarshal([]byte(alias.Arguments), &tcf.RawArguments)
+		_ = json.Unmarshal([]byte(alias.Arguments), &tcf.RawArguments)
 		return nil
 	}
 

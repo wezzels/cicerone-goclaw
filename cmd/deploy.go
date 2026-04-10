@@ -29,8 +29,7 @@ Examples:
 }
 
 var (
-	deployVMName string
-	deployForce  bool
+	deployForce bool
 )
 
 func init() {

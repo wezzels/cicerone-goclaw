@@ -24,10 +24,6 @@ Examples:
   cicerone workspace clean                  # Clean workspace files`,
 }
 
-var (
-	workspacePath string
-)
-
 func init() {
 	rootCmd.AddCommand(workspaceCmd)
 	workspaceCmd.AddCommand(workspaceInitCmd)
@@ -155,7 +151,7 @@ var workspaceListCmd = &cobra.Command{
 		fmt.Println()
 
 		var found []string
-		filepath.Walk(abs, func(path string, info os.FileInfo, err error) error {
+		_ = filepath.Walk(abs, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				return nil
 			}
@@ -216,7 +212,7 @@ var workspaceCleanCmd = &cobra.Command{
 
 func countFiles(path string) int {
 	count := 0
-	filepath.Walk(path, func(_ string, info os.FileInfo, _ error) error {
+	_ = filepath.Walk(path, func(_ string, info os.FileInfo, _ error) error {
 		if !info.IsDir() {
 			count++
 		}

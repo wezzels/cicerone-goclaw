@@ -281,7 +281,9 @@ func auditLogins() AuditResult {
 
 	count := strings.TrimSpace(string(out))
 	var num int
-	fmt.Sscanf(count, "%d", &num)
+	if _, err := fmt.Sscanf(count, "%d", &num); err != nil {
+		return AuditResult{"Failed Logins", "MED", "Unable to parse lastb output", "Check 'lastb' for details"}
+	}
 
 	// lastb output includes header line
 	if num > 5 {

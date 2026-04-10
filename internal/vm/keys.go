@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"golang.org/x/crypto/ssh/terminal"
+	"golang.org/x/term"
 
 	"github.com/crab-meat-repos/cicerone-goclaw/internal/ssh"
 )
@@ -422,7 +422,7 @@ func (km *KeyManager) RemoveFromSSHConfig(vmName string) error {
 // ReadPassword reads password from terminal (for interactive use).
 func ReadPassword(prompt string) (string, error) {
 	fmt.Print(prompt)
-	password, err := terminal.ReadPassword(int(os.Stdin.Fd()))
+	password, err := term.ReadPassword(int(os.Stdin.Fd()))
 	fmt.Println() // Newline after password
 	return string(password), err
 }

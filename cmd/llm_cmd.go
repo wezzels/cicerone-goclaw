@@ -111,7 +111,7 @@ func runLLMTest(cmd *cobra.Command, args []string) error {
 
 	// Parse version info
 	var info map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&info)
+	_ = json.NewDecoder(resp.Body).Decode(&info)
 
 	if version, ok := info["version"].(string); ok {
 		fmt.Printf("✓ Ollama version: %s\n", version)
@@ -139,7 +139,7 @@ func runLLMTest(cmd *cobra.Command, args []string) error {
 	defer resp2.Body.Close()
 
 	var genResp map[string]interface{}
-	json.NewDecoder(resp2.Body).Decode(&genResp)
+	_ = json.NewDecoder(resp2.Body).Decode(&genResp)
 
 	if genResp["response"] != nil {
 		fmt.Printf("✓ Generation test passed\n")
@@ -173,7 +173,7 @@ func runLLMModels(cmd *cobra.Command, args []string) error {
 		} `json:"models"`
 	}
 
-	json.NewDecoder(resp.Body).Decode(&tags)
+	_ = json.NewDecoder(resp.Body).Decode(&tags)
 
 	if len(tags.Models) == 0 {
 		fmt.Println("No models found. Pull with: ollama pull <model>")

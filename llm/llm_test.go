@@ -45,7 +45,7 @@ func TestOllamaProviderIsRunning(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/version" {
 			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(map[string]string{"version": "0.1.0"})
+			_ = json.NewEncoder(w).Encode(map[string]string{"version": "0.1.0"})
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
@@ -70,7 +70,7 @@ func TestOllamaProviderGenerate(t *testing.T) {
 		if r.URL.Path == "/api/generate" {
 			w.Header().Set("Content-Type", "application/json")
 			// Send two chunks then done
-			w.Write([]byte(`{"model":"test","response":"Hello","done":false}
+			_, _ = w.Write([]byte(`{"model":"test","response":"Hello","done":false}
 {"model":"test","response":" world","done":true}
 `))
 			return
@@ -101,7 +101,7 @@ func TestOllamaProviderChat(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/chat" {
 			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(`{"model":"test","message":{"role":"assistant","content":"Response"},"done":true}
+			_, _ = w.Write([]byte(`{"model":"test","message":{"role":"assistant","content":"Response"},"done":true}
 `))
 			return
 		}
@@ -134,7 +134,7 @@ func TestOllamaProviderModels(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/tags" {
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(ollamaModelsResponse{
+			_ = json.NewEncoder(w).Encode(ollamaModelsResponse{
 				Models: []ollamaModel{
 					{Name: "llama3", Size: 4000000000, Modified: "2024-01-01"},
 					{Name: "gemma3:12b", Size: 7000000000, Modified: "2024-01-02"},
@@ -196,7 +196,7 @@ func TestLlamaCPPProviderChat(t *testing.T) {
 		if r.URL.Path == "/v1/chat/completions" {
 			w.Header().Set("Content-Type", "text/event-stream")
 			// SSE format
-			w.Write([]byte(`data: {"id":"1","object":"chat.completion.chunk","created":1234,"model":"test","choices":[{"index":0,"delta":{"role":"assistant","content":"Hello"},"finish_reason":""}]}
+			_, _ = w.Write([]byte(`data: {"id":"1","object":"chat.completion.chunk","created":1234,"model":"test","choices":[{"index":0,"delta":{"role":"assistant","content":"Hello"},"finish_reason":""}]}
 
 data: {"id":"1","object":"chat.completion.chunk","created":1234,"model":"test","choices":[{"index":0,"delta":{"content":" world"},"finish_reason":""}]}
 
@@ -236,7 +236,7 @@ func TestLlamaCPPProviderModels(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/v1/models" {
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(openAIModelsResponse{
+			_ = json.NewEncoder(w).Encode(openAIModelsResponse{
 				Data: []struct {
 					ID      string `json:"id"`
 					Object  string `json:"object"`

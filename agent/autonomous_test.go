@@ -26,7 +26,7 @@ func TestNewAutonomousAgent(t *testing.T) {
 	autoAgent := NewAutonomousAgent(ag)
 
 	if autoAgent == nil {
-		t.Error("NewAutonomousAgent returned nil")
+		t.Fatal("NewAutonomousAgent returned nil")
 	}
 	if autoAgent.maxSteps != 20 {
 		t.Errorf("Expected default maxSteps 20, got %d", autoAgent.maxSteps)
