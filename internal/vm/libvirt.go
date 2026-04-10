@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -588,9 +589,32 @@ func (m *LibvirtManager) snapshotToInfo(snap *libvirt.DomainSnapshot) (SnapshotI
 		isCurrent = false
 	}
 
+	// Get creation time from snapshot XML
+	xml, err := snap.GetXMLDesc(0)
+	var createdAt time.Time
+	if err == nil {
+		// Parse creation time from XML: <creationTime>unix_timestamp</creationTime>
+		lines := strings.Split(xml, "\n")
+		for _, line := range lines {
+			if strings.Contains(line, "<creationTime>") {
+				// Extract timestamp
+				start := strings.Index(line, "<creationTime>") + len("<creationTime>")
+				end := strings.Index(line, "</creationTime>")
+				if start < end {
+					tsStr := strings.TrimSpace(line[start:end])
+					if ts, err := strconv.ParseInt(tsStr, 10, 64); err == nil {
+						createdAt = time.Unix(ts, 0)
+					}
+				}
+				break
+			}
+		}
+	}
+
 	return SnapshotInfo{
-		Name:    name,
-		Current: isCurrent,
+		Name:      name,
+		CreatedAt: createdAt,
+		Current:   isCurrent,
 	}, nil
 }
 
