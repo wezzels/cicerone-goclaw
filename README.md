@@ -458,6 +458,115 @@ MIT License - See LICENSE file for details.
 - [Function Calling Guide](https://ollama.com/blog/function-calling)
 - [Llama 3.1 Release Notes](https://ai.meta.com/blog/meta-llama-3-1/)
 
+## VM Workspace Management (Deploy)
+
+The `deploy` command provides VM-based workspace management using libvirt/QEMU. This allows isolated execution environments for tasks.
+
+### Prerequisites
+
+```bash
+# Install libvirt
+sudo apt install libvirt-daemon-system libvirt-clients qemu-kvm
+
+# Add user to libvirt group
+sudo usermod -aG libvirt $(whoami)
+
+# Build with libvirt support
+CGO_ENABLED=1 go build -tags libvirt -o cicerone .
+```
+
+### Deploy Commands
+
+| Command | Description |
+|---------|-------------|
+| `deploy list` | List all VM workspaces |
+| `deploy create <name>` | Create a VM workspace |
+| `deploy start <name>` | Start a VM |
+| `deploy stop <name>` | Stop a VM |
+| `deploy restart <name>` | Restart a VM |
+| `deploy status <name>` | Show VM status |
+| `deploy shell <name>` | Open SSH shell |
+| `deploy exec <name> <cmd>` | Execute command on VM |
+| `deploy push <name> <local> <remote>` | Push file to VM |
+| `deploy pull <name> <remote> <local>` | Pull file from VM |
+| `deploy snapshot <name>` | Manage VM snapshots |
+| `deploy keys <name>` | Manage SSH keys |
+
+### VM Snapshots
+
+Snapshots allow saving and restoring VM state:
+
+```bash
+# Create snapshot
+cicerone deploy snapshot myvm --create --name "before-tests" --description "Before running tests"
+
+# List snapshots
+cicerone deploy snapshot myvm --list
+
+# Revert to snapshot
+cicerone deploy snapshot myvm --revert --name "before-tests"
+
+# Delete snapshot
+cicerone deploy snapshot myvm --delete --name "before-tests"
+```
+
+### VM Configuration
+
+Add VMs to `~/.cicerone/config.yaml`:
+
+```yaml
+vms:
+  dev:
+    name: wezzelos-dev
+    image: /var/lib/libvirt/images/wezzelos-base.qcow2
+    memory: 4096
+    vcpus: 2
+    network: default
+    user: root
+    ssh_key: ~/.cicerone/keys/dev
+    
+  test:
+    name: wezzelos-test
+    image: /var/lib/libvirt/images/wezzelos-base.qcow2
+    memory: 2048
+    vcpus: 1
+    network: default
+    user: root
+```
+
+### VM Workflow Examples
+
+```bash
+# List available VMs
+cicerone deploy list
+# NAME      STATE    IP               MEMORY   VCPUS
+# debian11  running  192.168.122.164  8192MB   4
+# fedora41  running  10.0.20.156      16384MB  4
+
+# Execute command on VM
+cicerone deploy exec debian11 "ls -la /workspace"
+
+# Push/pull files
+cicerone deploy push debian11 ./local.txt /workspace/remote.txt
+cicerone deploy pull debian11 /workspace/remote.txt ./local.txt
+
+# Open SSH shell
+cicerone deploy shell debian11
+```
+
+### SSH Key Management
+
+```bash
+# Generate keys for VM access
+cicerone deploy keys debian11 --generate
+
+# Deploy existing key
+cicerone deploy keys debian11 --deploy --key ~/.ssh/id_ed25519.pub
+
+# List keys
+cicerone deploy keys debian11 --list
+```
+
 ---
 
 *Last updated: 2026-04-08 21:30 UTC*
