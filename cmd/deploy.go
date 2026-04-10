@@ -10,6 +10,7 @@ import (
 	"github.com/crab-meat-repos/cicerone-goclaw/internal/vm"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"golang.org/x/term"
 )
 
 var deployCmd = &cobra.Command{
@@ -66,6 +67,8 @@ func init() {
 	deployKeysCmd.Flags().Bool("deploy", false, "Deploy key to VM")
 	deployKeysCmd.Flags().Bool("status", false, "Show key status")
 	deployKeysCmd.Flags().String("key", "", "Path to existing SSH key")
+	deployKeysCmd.Flags().String("user", "root", "SSH user for key deployment")
+	deployKeysCmd.Flags().String("password", "", "Password for key deployment (prompted if needed)")
 
 	// Flags for snapshot
 	deploySnapshotCmd.Flags().Bool("create", false, "Create snapshot")
@@ -622,7 +625,43 @@ func runDeployKeys(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("failed to setup key: %w", err)
 		}
 
-		// Deploy key
+		// Get user and password flags
+		sshUser, _ := cmd.Flags().GetString("user")
+		password, _ := cmd.Flags().GetString("password")
+
+		// Read public key
+		pubKeyData, err := os.ReadFile(keyInfo.PublicKeyPath)
+		if err != nil {
+			return fmt.Errorf("failed to read public key: %w", err)
+		}
+
+		// Try to deploy key
+		fmt.Printf("Deploying SSH key to VM '%s' (%s)...\n", name, info.IP)
+
+		// First try with password if provided
+		if password != "" {
+			err = keyMgr.DeployKeyWithPassword(context.Background(), name, info.IP, 22, sshUser, password, pubKeyData)
+			if err != nil {
+				return fmt.Errorf("failed to deploy key: %w", err)
+			}
+			fmt.Println("✓ SSH key deployed successfully")
+		} else {
+			// Try to prompt for password
+			fmt.Printf("Enter password for %s@%s: ", sshUser, info.IP)
+			passwordBytes, err := term.ReadPassword(int(os.Stdin.Fd()))
+			fmt.Println() // newline after password
+			if err != nil {
+				return fmt.Errorf("failed to read password: %w", err)
+			}
+
+			err = keyMgr.DeployKeyWithPassword(context.Background(), name, info.IP, 22, sshUser, string(passwordBytes), pubKeyData)
+			if err != nil {
+				return fmt.Errorf("failed to deploy key: %w", err)
+			}
+			fmt.Println("✓ SSH key deployed successfully")
+		}
+
+		// Add to known_hosts
 		if err := keyMgr.AddToKnownHosts(info.IP, 22); err != nil {
 			fmt.Printf("Warning: failed to add to known_hosts: %v\n", err)
 		}

@@ -713,21 +713,100 @@ func (m *LibvirtManager) generateDomainXML(cfg *VMConfig) (string, error) {
 }
 
 func (m *LibvirtManager) getIPFromARP(dom *libvirt.Domain) (string, error) {
-	// Get MAC address
-	ifaces, err := dom.ListAllInterfaceAddresses(libvirt.DOMAIN_INTERFACE_ADDRESSES_SRC_AGENT)
+	// Get MAC address from domain XML
+	xmlDesc, err := dom.GetXMLDesc(0)
 	if err != nil {
-		// Fallback: parse ARP table
-		// TODO: implement ARP lookup
-		return "", fmt.Errorf("no IP address available")
+		return "", fmt.Errorf("failed to get domain XML: %w", err)
 	}
 
-	for _, iface := range ifaces {
-		if len(iface.Addrs) > 0 {
-			return iface.Addrs[0].Addr, nil
+	// Parse MAC from XML
+	mac := parseMACFromXML(xmlDesc)
+	if mac == "" {
+		return "", fmt.Errorf("no MAC address found in domain XML")
+	}
+
+	// Try qemu-guest-agent first
+	ifaces, err := dom.ListAllInterfaceAddresses(libvirt.DOMAIN_INTERFACE_ADDRESSES_SRC_AGENT)
+	if err == nil {
+		for _, iface := range ifaces {
+			if len(iface.Addrs) > 0 {
+				return iface.Addrs[0].Addr, nil
+			}
 		}
 	}
 
-	return "", fmt.Errorf("no IP address found")
+	// Fallback: parse ARP table
+	ip := lookupIPByMAC(mac)
+	if ip != "" {
+		return ip, nil
+	}
+
+	// Fallback: parse DHCP leases
+	ip = lookupDHCPLease(mac)
+	if ip != "" {
+		return ip, nil
+	}
+
+	return "", fmt.Errorf("no IP address available")
+}
+
+func parseMACFromXML(xmlDesc string) string {
+	// Simple XML parsing for MAC address
+	start := strings.Index(xmlDesc, "mac address=\"")
+	if start == -1 {
+		return ""
+	}
+	start += len("mac address=\"")
+	end := strings.Index(xmlDesc[start:], "\"")
+	if end == -1 {
+		return ""
+	}
+	return xmlDesc[start : start+end]
+}
+
+func lookupIPByMAC(mac string) string {
+	// Parse ARP table
+	data, err := os.ReadFile("/proc/net/arp")
+	if err != nil {
+		return ""
+	}
+
+	lines := strings.Split(string(data), "\n")
+	for _, line := range lines[1:] { // skip header
+		fields := strings.Fields(line)
+		if len(fields) >= 4 {
+			if fields[3] == mac {
+				return fields[0]
+			}
+		}
+	}
+	return ""
+}
+
+func lookupDHCPLease(mac string) string {
+	// Parse libvirt dnsmasq leases file
+	leaseFiles := []string{
+		"/var/lib/libvirt/dnsmasq/default.leases",
+		"/var/lib/misc/dnsmasq.leases",
+	}
+
+	for _, file := range leaseFiles {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			continue
+		}
+
+		lines := strings.Split(string(data), "\n")
+		for _, line := range lines {
+			fields := strings.Fields(line)
+			if len(fields) >= 2 {
+				if fields[1] == mac {
+					return fields[2]
+				}
+			}
+		}
+	}
+	return ""
 }
 
 // Helper functions
