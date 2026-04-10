@@ -12,10 +12,12 @@ import (
 
 // AutonomousAgent runs tasks autonomously with planning and iteration.
 type AutonomousAgent struct {
-	executor  *Executor
-	agent     *Agent
-	maxSteps  int
-	toolDefs []llm.Tool
+	executor    *Executor
+	vmExecutor  *VMExecutor
+	agent       *Agent
+	maxSteps    int
+	toolDefs    []llm.Tool
+	useVM       bool
 }
 
 // TaskResult represents the result of autonomous task execution.
@@ -69,17 +71,34 @@ func NewAutonomousAgent(ag *Agent) *AutonomousAgent {
 		}
 	}
 
+	// Create VM-aware executor
+	vmExec := NewVMExecutor(ag)
+
 	return &AutonomousAgent{
-		executor:  NewExecutor(ag),
-		agent:     ag,
-		maxSteps:  20, // Increased for multi-step tasks like creating Docker apps
-		toolDefs:  tools,
+		executor:   NewExecutor(ag),
+		vmExecutor: vmExec,
+		agent:      ag,
+		maxSteps:   20, // Increased for multi-step tasks like creating Docker apps
+		toolDefs:   tools,
 	}
 }
 
 // SetMaxSteps sets the maximum number of iterations.
 func (a *AutonomousAgent) SetMaxSteps(max int) {
 	a.maxSteps = max
+}
+
+// SetVM enables or disables VM execution mode.
+func (a *AutonomousAgent) SetVM(useVM bool) {
+	a.useVM = useVM
+}
+
+// executeTools executes tool calls, routing to VM if active.
+func (a *AutonomousAgent) executeTools(ctx context.Context, calls []ToolCall) []ToolResult {
+	if a.useVM && a.vmExecutor != nil && a.vmExecutor.IsVMActive() {
+		return a.vmExecutor.ExecuteTools(ctx, calls)
+	}
+	return a.executor.ExecuteTools(ctx, calls)
 }
 
 // ExecuteTask runs a task autonomously with the LLM provider.
@@ -155,7 +174,7 @@ func (a *AutonomousAgent) ExecuteTask(ctx context.Context, task string, onProgre
 			onProgress(fmt.Sprintf("Step %d: Executing %s", step, strings.Join(toolNames, ", ")))
 		}
 
-		toolResults := a.executor.ExecuteTools(ctx, toolCalls)
+		toolResults := a.executeTools(ctx, toolCalls)
 		stepResult.ToolResults = toolResults
 		result.Steps = append(result.Steps, stepResult)
 
@@ -327,7 +346,7 @@ IMPORTANT: All file operations are sandboxed to the working directory.
 			}
 
 			// Execute tools
-			toolResults := a.executor.ExecuteTools(ctx, toolCalls)
+			toolResults := a.executeTools(ctx, toolCalls)
 
 			stepResult := StepResult{
 				StepNumber:  step,
