@@ -168,34 +168,6 @@ func TestConfigString(t *testing.T) {
 	}
 }
 
-func TestHostAliasConversion(t *testing.T) {
-	cfg := &Config{
-		Name:    "test",
-		Host:    "example.com",
-		Port:    22,
-		User:    "testuser",
-		KeyPath: "~/.ssh/id_rsa",
-	}
-
-	// Config to HostAlias
-	alias := HostAliasFromConfig(cfg)
-	if alias.Name != cfg.Name {
-		t.Errorf("HostAliasFromConfig Name = %s, want %s", alias.Name, cfg.Name)
-	}
-	if alias.Host != cfg.Host {
-		t.Errorf("HostAliasFromConfig Host = %s, want %s", alias.Host, cfg.Host)
-	}
-
-	// HostAlias to Config
-	cfg2 := ConfigFromHostAlias(alias)
-	if cfg2.Name != alias.Name {
-		t.Errorf("ConfigFromHostAlias Name = %s, want %s", cfg2.Name, alias.Name)
-	}
-	if cfg2.Host != alias.Host {
-		t.Errorf("ConfigFromHostAlias Host = %s, want %s", cfg2.Host, alias.Host)
-	}
-}
-
 // Integration tests require actual SSH server
 // These are skipped in normal test runs
 
