@@ -1,0 +1,46 @@
+#!/bin/bash
+# Pre-commit hook to prevent secrets from being committed
+
+# Get staged files
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.go$' | grep -v '_test\.go$')
+
+if [ -z "$STAGED_FILES" ]; then
+    echo "✅ No Go files to check"
+    exit 0
+fi
+
+# Check for hardcoded passwords in staged files
+for FILE in $STAGED_FILES; do
+    if [ -f "$FILE" ]; then
+        # Check for hardcoded passwords (not function calls like os.Getenv or ReadPassword)
+        if grep -E "password\s*[:=]\s*['\"][^'\"]{8,}['\"]" "$FILE" 2>/dev/null | grep -v "os\.Getenv\|getEnvOrDefault\|viper\.\|ReadPassword" > /dev/null; then
+            echo "❌ ERROR: Hardcoded password detected in $FILE"
+            echo "   Use environment variables instead (os.Getenv, getEnvOrDefault)"
+            grep -E "password\s*[:=]\s*['\"][^'\"]{8,}['\"]" "$FILE" | head -3
+            exit 1
+        fi
+    fi
+done
+
+# Check for SSH private key files being staged
+KEY_FILES=$(git diff --cached --name-only | grep -E "id_ed25519|id_rsa|\.pem|\.key" | grep -v ".pub" | grep -v ".gitignore")
+if [ -n "$KEY_FILES" ]; then
+    echo "❌ ERROR: SSH private key file(s) detected in staging:"
+    echo "$KEY_FILES"
+    echo "   Add keys to ~/.ssh/ or ~/.cicerone/keys/ instead"
+    exit 1
+fi
+
+# Check for API keys/tokens in staged files
+for FILE in $STAGED_FILES; do
+    if [ -f "$FILE" ]; then
+        if grep -E "(api[_-]?key|token|secret)\s*[:=]\s*['\"][a-zA-Z0-9_-]{20,}['\"]" "$FILE" 2>/dev/null | grep -v "os\.Getenv\|getEnvOrDefault\|viper\." > /dev/null; then
+            echo "❌ ERROR: Hardcoded API key or token detected in $FILE"
+            echo "   Use environment variables instead"
+            exit 1
+        fi
+    fi
+done
+
+echo "✅ No secrets detected in staged files"
+exit 0

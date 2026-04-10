@@ -1,0 +1,41 @@
+# GitLeaks config for cicerone-goclaw
+# Prevents secrets from being committed
+
+title = "cicerone-goclaw secrets detection"
+
+[extend]
+# Use the default gitleaks rules
+useDefault = true
+
+[[rules]]
+id = "generic-api-key"
+description = "Generic API Key"
+regex = '''(?i)(?:api[_-]?key|token|secret|password|passwd|pwd)\s*[=:]\s*['"]?[a-zA-Z0-9_\-]{20,}['"]?'''
+tags = ["key", "API", "generic"]
+
+[[rules]]
+id = "ssh-private-key"
+description = "SSH Private Key"
+regex = '''-----BEGIN (?:RSA |DSA |EC |OPENSSH )?PRIVATE KEY-----'''
+tags = ["key", "SSH"]
+
+[[rules]]
+id = "password-in-code"
+description = "Hardcoded password"
+regex = '''(?:password|passwd|pwd)\s*[=:]\s*['"][^'"]{8,}['"]'''
+tags = ["password"]
+
+[allowlist]
+description = "Allowed patterns"
+paths = [
+    '''_test\.go$''',
+    '''test_.*\.go$''',
+    '''\.gitignore$''',
+    '''scripts/pre-commit$''',
+    '''\.gitleaks\.toml$''',
+]
+regexes = [
+    '''os\.Getenv''',
+    '''getEnvOrDefault''',
+    '''viper\.GetString''',
+]
