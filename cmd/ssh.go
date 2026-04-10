@@ -31,10 +31,9 @@ Examples:
 }
 
 var (
-	sshKeyPath  string
-	sshPort     int
-	sshTimeout  time.Duration
-	sshPassword string
+	sshKeyPath string
+	sshPort    int
+	sshTimeout time.Duration
 )
 
 func init() {

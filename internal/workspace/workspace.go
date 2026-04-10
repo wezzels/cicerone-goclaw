@@ -3,7 +3,6 @@ package workspace
 import (
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 // Workspace represents a code workspace
@@ -125,10 +124,14 @@ func IsWorkspace(path string) bool {
 }
 
 // expandHome expands ~ to home directory
-func expandHome(path string) string {
-	if strings.HasPrefix(path, "~/") {
-		home, _ := os.UserHomeDir()
-		return filepath.Join(home, path[2:])
-	}
-	return path
-}
+// Currently unused but kept for future use
+//func expandHome(path string) string {
+//	if strings.HasPrefix(path, "~/") {
+//		home, err := os.UserHomeDir()
+//		if err != nil {
+//			return path
+//		}
+//		return filepath.Join(home, path[2:])
+//	}
+//	return path
+//}

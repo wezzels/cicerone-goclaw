@@ -316,7 +316,7 @@ IMPORTANT: All file operations are sandboxed to the working directory.
 			for i, tc := range resp.ToolCalls {
 				var args map[string]interface{}
 				if tc.Function.Arguments != "" {
-					json.Unmarshal([]byte(tc.Function.Arguments), &args)
+					_ = json.Unmarshal([]byte(tc.Function.Arguments), &args)
 				}
 				toolCalls[i] = ToolCall{
 					ID:        tc.ID,

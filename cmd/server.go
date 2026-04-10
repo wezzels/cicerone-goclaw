@@ -204,7 +204,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 
 func handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
+	_ = json.NewEncoder(w).Encode(map[string]string{
 		"status":  "ok",
 		"version": "2.0.0",
 		"type":    "cicerone-goclaw",
@@ -238,7 +238,7 @@ func handleModels(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(ModelsResponse{
+	_ = json.NewEncoder(w).Encode(ModelsResponse{
 		Object: "list",
 		Data:   data,
 	})
@@ -328,7 +328,7 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		for i, tc := range resp.ToolCalls {
 			var args map[string]interface{}
 			if tc.Function.Arguments != "" {
-				json.Unmarshal([]byte(tc.Function.Arguments), &args)
+				_ = json.Unmarshal([]byte(tc.Function.Arguments), &args)
 			}
 			toolCalls[i] = agent.ToolCall{
 				ID:        tc.ID,
@@ -358,7 +358,7 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 func handleStreamingChat(w http.ResponseWriter, r *http.Request, req *ChatRequest, model string) {
@@ -374,12 +374,6 @@ func handleStreamingChat(w http.ResponseWriter, r *http.Request, req *ChatReques
 	}
 
 	ctx := r.Context()
-
-	// Use tools from request or default
-	tools := req.Tools
-	if len(tools) == 0 {
-		tools = serverTools
-	}
 
 	// Call LLM with streaming
 	stream, err := serverProvider.ChatStream(ctx, req.Messages)
@@ -456,7 +450,7 @@ func handleExecute(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 func handleVMStatus(w http.ResponseWriter, r *http.Request) {
@@ -489,7 +483,7 @@ func handleVMStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 func getUptime() string {
@@ -500,7 +494,9 @@ func getUptime() string {
 	}
 
 	var uptimeSeconds float64
-	fmt.Sscanf(string(data), "%f", &uptimeSeconds)
+	if _, err := fmt.Sscanf(string(data), "%f", &uptimeSeconds); err != nil {
+		return "unknown"
+	}
 
 	duration := time.Duration(uptimeSeconds * float64(time.Second))
 	return duration.Round(time.Second).String()
@@ -519,15 +515,18 @@ func getMemoryInfo() MemoryInfo {
 		lines := strings.Split(string(data), "\n")
 		for _, line := range lines {
 			if strings.HasPrefix(line, "MemTotal:") {
-				fmt.Sscanf(line, "MemTotal: %d", &total)
-				total *= 1024 // Convert from KB to bytes
+				if _, err := fmt.Sscanf(line, "MemTotal: %d", &total); err == nil {
+					total *= 1024 // Convert from KB to bytes
+				}
 			} else if strings.HasPrefix(line, "MemAvailable:") {
-				fmt.Sscanf(line, "MemAvailable: %d", &available)
-				available *= 1024
+				if _, err := fmt.Sscanf(line, "MemAvailable: %d", &available); err == nil {
+					available *= 1024 // Convert from KB to bytes
+				}
 			} else if strings.HasPrefix(line, "MemFree:") && available == 0 {
 				var free uint64
-				fmt.Sscanf(line, "MemFree: %d", &free)
-				free *= 1024
+				if _, err := fmt.Sscanf(line, "MemFree: %d", &free); err == nil {
+					free *= 1024
+				}
 				// MemAvailable is better, but MemFree is a fallback
 			}
 		}
@@ -573,9 +572,9 @@ func getDiskInfo() DiskInfo {
 	}
 
 	var total, used, available uint64
-	fmt.Sscanf(fields[1], "%d", &total)
-	fmt.Sscanf(fields[2], "%d", &used)
-	fmt.Sscanf(fields[3], "%d", &available)
+	_, _ = fmt.Sscanf(fields[1], "%d", &total)
+	_, _ = fmt.Sscanf(fields[2], "%d", &used)
+	_, _ = fmt.Sscanf(fields[3], "%d", &available)
 
 	percent := float64(0)
 	if total > 0 {

@@ -118,7 +118,7 @@ func (e *Executor) RunBackground(command string, args ...string) (int, error) {
 
 	// Wait for completion in background
 	go func() {
-		cmd.Wait()
+		_ = cmd.Wait()
 		e.processes.Delete(pid)
 	}()
 

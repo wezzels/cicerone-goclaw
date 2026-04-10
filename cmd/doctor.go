@@ -232,9 +232,10 @@ func checkMemory() CheckResult {
 				if len(fields) >= 2 {
 					// Convert KB to GB
 					var kb int
-					fmt.Sscanf(fields[1], "%d", &kb)
-					gb := float64(kb) / 1024 / 1024
-					available = fmt.Sprintf("%.1f GB available", gb)
+					if _, err := fmt.Sscanf(fields[1], "%d", &kb); err == nil {
+						gb := float64(kb) / 1024 / 1024
+						available = fmt.Sprintf("%.1f GB available", gb)
+					}
 					break
 				}
 			}

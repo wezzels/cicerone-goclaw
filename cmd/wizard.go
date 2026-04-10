@@ -227,9 +227,12 @@ func (w *Wizard) printSuccess(msg string) {
 }
 
 // printError prints an error message
+// Note: Currently unused, kept for future use
+/*
 func (w *Wizard) printError(msg string) {
 	fmt.Printf("  ✗ %s\n", msg)
 }
+*/
 
 // printWarning prints a warning message
 func (w *Wizard) printWarning(msg string) {

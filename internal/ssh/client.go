@@ -145,7 +145,7 @@ func (c *Client) Exec(ctx context.Context, command string) (stdout, stderr []byt
 	select {
 	case <-ctx.Done():
 		// Context cancelled, try to close session
-		session.Signal(ssh.SIGKILL)
+		_ = session.Signal(ssh.SIGKILL)
 		return nil, nil, ctx.Err()
 	case err := <-done:
 		return outBuf.Bytes(), errBuf.Bytes(), err
@@ -258,12 +258,12 @@ func (c *Client) forwardConnection(localConn net.Conn, remoteAddr string) {
 
 	go func() {
 		defer wg.Done()
-		io.Copy(localConn, remoteConn)
+		_, _ = io.Copy(localConn, remoteConn)
 	}()
 
 	go func() {
 		defer wg.Done()
-		io.Copy(remoteConn, localConn)
+		_, _ = io.Copy(remoteConn, localConn)
 	}()
 
 	wg.Wait()

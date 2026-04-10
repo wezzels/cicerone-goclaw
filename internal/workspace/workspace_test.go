@@ -3,6 +3,7 @@ package workspace
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -273,7 +274,7 @@ func TestSandbox_SafePath(t *testing.T) {
 			res := sandbox.SafePath(tt.input)
 			// Path should be within workspace
 			if tt.wantSafe {
-				if !filepath.HasPrefix(res, tmpDir) {
+				if !strings.HasPrefix(res, tmpDir) {
 					t.Errorf("SafePath(%s) = %s, should be within %s", tt.input, res, tmpDir)
 				}
 			}
@@ -346,7 +347,7 @@ func TestExecutor_WorkingDir(t *testing.T) {
 
 	// Output should be tmpDir
 	result := string(output)
-	if !filepath.HasPrefix(result, tmpDir) {
+	if !strings.HasPrefix(result, tmpDir) {
 		t.Errorf("pwd returned %s, should start with %s", result, tmpDir)
 	}
 }

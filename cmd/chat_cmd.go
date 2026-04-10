@@ -15,6 +15,8 @@ import (
 	"github.com/crab-meat-repos/cicerone-goclaw/web"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 // chatCmd represents the chat command
@@ -219,7 +221,8 @@ ALWAYS use the tools to perform actions. The tools work and will execute your co
 					if msg.Role == "system" {
 						continue
 					}
-					fmt.Printf("%s: %s\n", strings.Title(msg.Role), msg.Content)
+					roleTitle := cases.Title(language.English).String(msg.Role)
+					fmt.Printf("%s: %s\n", roleTitle, msg.Content)
 				}
 				fmt.Println(strings.Repeat("-", 40))
 			}
@@ -501,7 +504,7 @@ ALWAYS use the tools to perform actions. The tools work and will execute your co
 			for i, tc := range resp.ToolCalls {
 				var args map[string]interface{}
 				if tc.Function.Arguments != "" {
-					json.Unmarshal([]byte(tc.Function.Arguments), &args)
+					_ = json.Unmarshal([]byte(tc.Function.Arguments), &args)
 				}
 				toolCalls[i] = agent.ToolCall{
 					ID:        tc.ID,
@@ -565,6 +568,8 @@ ALWAYS use the tools to perform actions. The tools work and will execute your co
 }
 
 // streamChat streams the response and returns the full text
+// Note: Currently unused, kept for future use
+/*
 func streamChat(ctx context.Context, provider llm.Provider, messages []llm.Message) (string, error) {
 	stream, err := provider.ChatStream(ctx, messages)
 	if err != nil {
@@ -585,3 +590,4 @@ func streamChat(ctx context.Context, provider llm.Provider, messages []llm.Messa
 
 	return response, nil
 }
+*/

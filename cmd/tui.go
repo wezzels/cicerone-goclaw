@@ -11,6 +11,8 @@ import (
 	"github.com/crab-meat-repos/cicerone-goclaw/llm"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 // tuiCmd represents the tui command
@@ -115,7 +117,7 @@ func printMenu() {
 
 func waitForEnter(reader *bufio.Reader) {
 	fmt.Print("\nPress Enter to continue...")
-	reader.ReadString('\n')
+	_, _ = reader.ReadString('\n')
 }
 
 func runTelegramInteractive(reader *bufio.Reader) error {
@@ -237,7 +239,7 @@ func runChatSession(reader *bufio.Reader) error {
 					if msg.Role == "system" {
 						continue
 					}
-					fmt.Printf("%s: %s\n", strings.Title(msg.Role), msg.Content)
+					fmt.Printf("%s: %s\n", cases.Title(language.English).String(msg.Role), msg.Content)
 				}
 				fmt.Println(strings.Repeat("-", 40))
 			}
@@ -325,7 +327,7 @@ func runGatewayStatusInteractive(reader *bufio.Reader) error {
 	// Wait for user to read before returning to menu
 	fmt.Println()
 	fmt.Print("Press Enter to continue...")
-	reader.ReadString('\n')
+	_, _ = reader.ReadString('\n')
 	
 	return err
 }
@@ -349,10 +351,10 @@ func runSettingsInteractive(reader *bufio.Reader) error {
 			// Show config
 			fmt.Println("\nCurrent Configuration:")
 			fmt.Println(strings.Repeat("=", 50))
-			runConfigShow(nil, nil)
+			_ = runConfigShow(nil, nil)
 			fmt.Println()
 			fmt.Print("Press Enter to continue...")
-			reader.ReadString('\n')
+			_, _ = reader.ReadString('\n')
 		case "2":
 			// Set config value
 			fmt.Println("\nSet Configuration Value")
@@ -364,7 +366,7 @@ func runSettingsInteractive(reader *bufio.Reader) error {
 			if key == "" {
 				fmt.Println("Cancelled.")
 				fmt.Print("Press Enter to continue...")
-				reader.ReadString('\n')
+				_, _ = reader.ReadString('\n')
 				continue
 			}
 			
@@ -377,7 +379,7 @@ func runSettingsInteractive(reader *bufio.Reader) error {
 			}
 			fmt.Println()
 			fmt.Print("Press Enter to continue...")
-			reader.ReadString('\n')
+			_, _ = reader.ReadString('\n')
 		case "3":
 			// Run wizard
 			fmt.Println("\nConfiguration Wizard")
@@ -388,7 +390,7 @@ func runSettingsInteractive(reader *bufio.Reader) error {
 			}
 			fmt.Println()
 			fmt.Print("Press Enter to continue...")
-			reader.ReadString('\n')
+			_, _ = reader.ReadString('\n')
 		case "4":
 			// Edit config file
 			fmt.Println("\nEdit Config File")
@@ -402,7 +404,7 @@ func runSettingsInteractive(reader *bufio.Reader) error {
 			fmt.Println("Edit manually with: " + editor + " " + configPath)
 			fmt.Println()
 			fmt.Print("Press Enter to continue...")
-			reader.ReadString('\n')
+			_, _ = reader.ReadString('\n')
 		case "b", "B", "back":
 			return nil
 		case "q", "Q", "quit", "exit":
@@ -410,7 +412,7 @@ func runSettingsInteractive(reader *bufio.Reader) error {
 		default:
 			fmt.Printf("\nUnknown choice: %s\n", choice)
 			fmt.Print("Press Enter to continue...")
-			reader.ReadString('\n')
+			_, _ = reader.ReadString('\n')
 		}
 	}
 }

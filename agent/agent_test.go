@@ -114,6 +114,7 @@ func TestAgent_AppendFile(t *testing.T) {
 	err = ag.AppendFile("newfile.txt", "content")
 	if err != nil {
 		// This is acceptable - file doesn't exist
+		_ = err // explicit ignore
 	}
 }
 
@@ -122,7 +123,7 @@ func TestAgent_DeleteFile(t *testing.T) {
 	ag := New(tmpDir)
 
 	// Create file
-	ag.WriteFile("delete.txt", "content")
+	_ = ag.WriteFile("delete.txt", "content")
 
 	// Delete file
 	err := ag.DeleteFile("delete.txt")
@@ -148,9 +149,9 @@ func TestAgent_ListDir(t *testing.T) {
 	ag := New(tmpDir)
 
 	// Create files
-	ag.WriteFile("file1.txt", "content1")
-	ag.WriteFile("file2.txt", "content2")
-	ag.Mkdir("subdir")
+	_ = ag.WriteFile("file1.txt", "content1")
+	_ = ag.WriteFile("file2.txt", "content2")
+	_ = ag.Mkdir("subdir")
 
 	// List directory
 	entries, err := ag.ListDir(".")
@@ -259,7 +260,7 @@ func TestAgent_HTTPOperations(t *testing.T) {
 	}
 
 	// HTTPPost
-	output, err = ag.HTTPPost(context.Background(), "https://httpbin.org/post", map[string]string{"key": "value"}, nil)
+	_, err = ag.HTTPPost(context.Background(), "https://httpbin.org/post", map[string]string{"key": "value"}, nil)
 	if err != nil {
 		t.Logf("HTTPPost failed (network may be unavailable): %v", err)
 	}

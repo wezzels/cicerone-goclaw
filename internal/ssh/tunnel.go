@@ -128,7 +128,7 @@ func copyData(dst, src net.Conn) {
 	for {
 		n, err := src.Read(buf)
 		if n > 0 {
-			dst.Write(buf[:n])
+			_, _ = dst.Write(buf[:n])
 		}
 		if err != nil {
 			break
@@ -274,7 +274,7 @@ func copyConn(dst, src net.Conn) {
 	for {
 		n, err := src.Read(buf)
 		if n > 0 {
-			dst.Write(buf[:n])
+			_, _ = dst.Write(buf[:n])
 		}
 		if err != nil {
 			break
