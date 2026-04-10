@@ -28,8 +28,8 @@ func TestNewAutonomousAgent(t *testing.T) {
 	if autoAgent == nil {
 		t.Error("NewAutonomousAgent returned nil")
 	}
-	if autoAgent.maxSteps != 10 {
-		t.Errorf("Expected default maxSteps 10, got %d", autoAgent.maxSteps)
+	if autoAgent.maxSteps != 20 {
+		t.Errorf("Expected default maxSteps 20, got %d", autoAgent.maxSteps)
 	}
 }
 
