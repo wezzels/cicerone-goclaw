@@ -44,6 +44,60 @@ logging:
   # Log file (optional, defaults to stdout)
   # file: "/var/log/cicerone.log"
 
+# VM workspaces (optional)
+# Configure VMs for isolated development environments
+vms:
+  # Development VM
+  dev:
+    # VM name in libvirt
+    name: "wezzelos-dev"
+    
+    # Path to base disk image (qcow2)
+    image: "/var/lib/libvirt/images/wezzelos-base.qcow2"
+    
+    # Memory in MB
+    memory: 4096
+    
+    # Number of vCPUs
+    vcpus: 2
+    
+    # Network name (libvirt network)
+    network: "default"
+    
+    # SSH user (default: root)
+    user: "root"
+    
+    # SSH port (default: 22)
+    ssh_port: 22
+    
+    # Path to SSH private key
+    ssh_key: "~/.cicerone/keys/dev"
+    
+    # Auto-start VM when needed
+    auto_start: false
+    
+    # Create snapshot on stop
+    snapshot_on_stop: false
+  
+  # Test VM (minimal config)
+  test:
+    name: "wezzelos-test"
+    image: "/var/lib/libvirt/images/wezzelos-base.qcow2"
+    memory: 2048
+    vcpus: 1
+    network: "default"
+
+# Deploy defaults
+deploy:
+  # Default VM to use for workspace
+  default_vm: "dev"
+  
+  # Default network for new VMs
+  default_network: "default"
+  
+  # Storage pool for VM images
+  storage_pool: "default"
+
 # Security configuration
 security:
   # Enable rate limiting
