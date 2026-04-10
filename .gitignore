@@ -40,3 +40,22 @@ debug
 
 # CI artifacts directory
 artifacts/
+
+# Credentials - NEVER commit these
+*.pem
+*.key
+id_ed25519
+id_ed25519_*
+id_rsa
+id_rsa_*
+*.pub
+!.gitignore
+
+# Environment files with secrets
+.env
+.env.*
+*.env
+credentials.yaml
+secrets.yaml
+
+agent/tmp/
