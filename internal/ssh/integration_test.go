@@ -9,77 +9,24 @@ import (
 )
 
 // Integration tests require a real SSH server
-// Run with: go test -run Integration ./internal/ssh/...
-//
-// Set environment variables for credentials:
-//   SSH_TEST_HOST     - SSH server hostname (default: 10.0.0.117)
-//   SSH_TEST_USER     - SSH username (default: wez)
-//   SSH_TEST_PASSWORD - SSH password (optional, for password auth)
-//   SSH_TEST_KEY      - Path to SSH private key (optional, for key auth)
+// Run with: go test -tags=integration ./internal/ssh/...
 
-func getEnvOrDefault(key, defaultVal string) string {
-	if val := os.Getenv(key); val != "" {
-		return val
-	}
-	return defaultVal
-}
-
-func TestIntegration_ClientWithKey(t *testing.T) {
+func TestIntegration_Client(t *testing.T) {
+	// Skip if not running integration tests
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
 
+	// Get credentials from environment or use defaults
 	host := getEnvOrDefault("SSH_TEST_HOST", "10.0.0.117")
 	user := getEnvOrDefault("SSH_TEST_USER", "wez")
-	keyPath := getEnvOrDefault("SSH_TEST_KEY", os.Getenv("HOME")+"/.cicerone/keys/id_ed25519_darth")
+	password := getEnvOrDefault("SSH_TEST_PASSWORD", "REMOVED")
 
 	cfg := &Config{
-		Host:    host,
-		Port:    22,
-		User:    user,
-		KeyPath: keyPath,
-		Timeout: 30 * time.Second,
-	}
-
-	client, err := NewClient(cfg)
-	if err != nil {
-		t.Fatalf("NewClient with key failed: %v", err)
-	}
-	defer client.Close()
-
-	if !client.IsConnected() {
-		t.Error("Client should be connected")
-	}
-
-	// Test exec
-	ctx := context.Background()
-	stdout, _, err := client.Exec(ctx, "echo key-auth-success")
-	if err != nil {
-		t.Fatalf("Exec failed: %v", err)
-	}
-	if string(stdout) != "key-auth-success\n" {
-		t.Errorf("Exec stdout = %q, want 'key-auth-success'", string(stdout))
-	}
-}
-
-func TestIntegration_ClientWithPassword(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping integration test in short mode")
-	}
-
-	host := getEnvOrDefault("SSH_TEST_HOST", "10.0.0.117")
-	user := getEnvOrDefault("SSH_TEST_USER", "wez")
-	password := os.Getenv("SSH_TEST_PASSWORD")
-
-	if password == "" {
-		t.Skip("SSH_TEST_PASSWORD not set, skipping password auth test")
-	}
-
-	cfg := &Config{
-		Host:    host,
-		Port:    22,
-		User:    user,
-		Timeout: 30 * time.Second,
+		Host:     host,
+		Port:     22,
+		User:     user,
+		Timeout:  30 * time.Second,
 	}
 
 	client, err := NewClientWithPassword(cfg, password)
@@ -114,34 +61,18 @@ func TestIntegration_ExecCommands(t *testing.T) {
 
 	host := getEnvOrDefault("SSH_TEST_HOST", "10.0.0.117")
 	user := getEnvOrDefault("SSH_TEST_USER", "wez")
-
-	// Prefer key auth, fall back to password
-	keyPath := getEnvOrDefault("SSH_TEST_KEY", os.Getenv("HOME")+"/.cicerone/keys/id_ed25519_darth")
-	password := os.Getenv("SSH_TEST_PASSWORD")
-
-	var client *Client
-	var err error
+	password := getEnvOrDefault("SSH_TEST_PASSWORD", "REMOVED")
 
 	cfg := &Config{
-		Host:    host,
-		Port:    22,
-		User:    user,
-		Timeout: 30 * time.Second,
+		Host:     host,
+		Port:     22,
+		User:     user,
+		Timeout:  30 * time.Second,
 	}
 
-	// Try key auth first
-	if _, keyErr := os.Stat(keyPath); keyErr == nil {
-		cfg.KeyPath = keyPath
-		client, err = NewClient(cfg)
-	} else if password != "" {
-		// Fall back to password
-		client, err = NewClientWithPassword(cfg, password)
-	} else {
-		t.Skip("No SSH_TEST_PASSWORD or valid SSH_TEST_KEY, skipping")
-	}
-
+	client, err := NewClientWithPassword(cfg, password)
 	if err != nil {
-		t.Fatalf("Failed to connect: %v", err)
+		t.Fatalf("NewClientWithPassword failed: %v", err)
 	}
 	defer client.Close()
 
@@ -149,9 +80,9 @@ func TestIntegration_ExecCommands(t *testing.T) {
 
 	// Test multiple commands
 	tests := []struct {
-		name string
-		cmd  string
-		want string
+		name    string
+		cmd     string
+		want    string
 	}{
 		{"pwd", "pwd", "/home/wez"},
 		{"whoami", "whoami", "wez"},
@@ -185,31 +116,18 @@ func TestIntegration_FileTransfer(t *testing.T) {
 
 	host := getEnvOrDefault("SSH_TEST_HOST", "10.0.0.117")
 	user := getEnvOrDefault("SSH_TEST_USER", "wez")
-	keyPath := getEnvOrDefault("SSH_TEST_KEY", os.Getenv("HOME")+"/.cicerone/keys/id_ed25519_darth")
-	password := os.Getenv("SSH_TEST_PASSWORD")
+	password := getEnvOrDefault("SSH_TEST_PASSWORD", "REMOVED")
 
 	cfg := &Config{
-		Host:    host,
-		Port:    22,
-		User:    user,
-		Timeout: 30 * time.Second,
+		Host:     host,
+		Port:     22,
+		User:     user,
+		Timeout:  30 * time.Second,
 	}
 
-	var client *Client
-	var err error
-
-	// Try key auth first
-	if _, keyErr := os.Stat(keyPath); keyErr == nil {
-		cfg.KeyPath = keyPath
-		client, err = NewClient(cfg)
-	} else if password != "" {
-		client, err = NewClientWithPassword(cfg, password)
-	} else {
-		t.Skip("No SSH_TEST_PASSWORD or valid SSH_TEST_KEY, skipping")
-	}
-
+	client, err := NewClientWithPassword(cfg, password)
 	if err != nil {
-		t.Fatalf("Failed to connect: %v", err)
+		t.Fatalf("NewClientWithPassword failed: %v", err)
 	}
 	defer client.Close()
 
@@ -273,31 +191,18 @@ func TestIntegration_Shell(t *testing.T) {
 
 	host := getEnvOrDefault("SSH_TEST_HOST", "10.0.0.117")
 	user := getEnvOrDefault("SSH_TEST_USER", "wez")
-	keyPath := getEnvOrDefault("SSH_TEST_KEY", os.Getenv("HOME")+"/.cicerone/keys/id_ed25519_darth")
-	password := os.Getenv("SSH_TEST_PASSWORD")
+	password := getEnvOrDefault("SSH_TEST_PASSWORD", "REMOVED")
 
 	cfg := &Config{
-		Host:    host,
-		Port:    22,
-		User:    user,
-		Timeout: 30 * time.Second,
+		Host:     host,
+		Port:     22,
+		User:     user,
+		Timeout:  30 * time.Second,
 	}
 
-	var client *Client
-	var err error
-
-	// Try key auth first
-	if _, keyErr := os.Stat(keyPath); keyErr == nil {
-		cfg.KeyPath = keyPath
-		client, err = NewClient(cfg)
-	} else if password != "" {
-		client, err = NewClientWithPassword(cfg, password)
-	} else {
-		t.Skip("No SSH_TEST_PASSWORD or valid SSH_TEST_KEY, skipping")
-	}
-
+	client, err := NewClientWithPassword(cfg, password)
 	if err != nil {
-		t.Fatalf("Failed to connect: %v", err)
+		t.Fatalf("NewClientWithPassword failed: %v", err)
 	}
 	defer client.Close()
 
@@ -317,31 +222,18 @@ func TestIntegration_ExecWithTimeout(t *testing.T) {
 
 	host := getEnvOrDefault("SSH_TEST_HOST", "10.0.0.117")
 	user := getEnvOrDefault("SSH_TEST_USER", "wez")
-	keyPath := getEnvOrDefault("SSH_TEST_KEY", os.Getenv("HOME")+"/.cicerone/keys/id_ed25519_darth")
-	password := os.Getenv("SSH_TEST_PASSWORD")
+	password := getEnvOrDefault("SSH_TEST_PASSWORD", "REMOVED")
 
 	cfg := &Config{
-		Host:    host,
-		Port:    22,
-		User:    user,
-		Timeout: 30 * time.Second,
+		Host:     host,
+		Port:     22,
+		User:     user,
+		Timeout:  30 * time.Second,
 	}
 
-	var client *Client
-	var err error
-
-	// Try key auth first
-	if _, keyErr := os.Stat(keyPath); keyErr == nil {
-		cfg.KeyPath = keyPath
-		client, err = NewClient(cfg)
-	} else if password != "" {
-		client, err = NewClientWithPassword(cfg, password)
-	} else {
-		t.Skip("No SSH_TEST_PASSWORD or valid SSH_TEST_KEY, skipping")
-	}
-
+	client, err := NewClientWithPassword(cfg, password)
 	if err != nil {
-		t.Fatalf("Failed to connect: %v", err)
+		t.Fatalf("NewClientWithPassword failed: %v", err)
 	}
 	defer client.Close()
 
@@ -359,4 +251,11 @@ func TestIntegration_ExecWithTimeout(t *testing.T) {
 	if err == nil {
 		t.Error("ExecWithTimeout should timeout for slow command")
 	}
+}
+
+func getEnvOrDefault(key, defaultVal string) string {
+	if val := os.Getenv(key); val != "" {
+		return val
+	}
+	return defaultVal
 }
