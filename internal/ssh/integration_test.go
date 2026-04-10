@@ -11,6 +11,45 @@ import (
 // Integration tests require a real SSH server
 // Run with: go test -tags=integration ./internal/ssh/...
 
+func TestIntegration_ClientWithKey(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	// Test with SSH key
+	host := getEnvOrDefault("SSH_TEST_HOST", "10.0.0.117")
+	user := getEnvOrDefault("SSH_TEST_USER", "wez")
+	keyPath := getEnvOrDefault("SSH_TEST_KEY", os.Getenv("HOME")+"/.cicerone/keys/id_ed25519_darth")
+
+	cfg := &Config{
+		Host:     host,
+		Port:     22,
+		User:     user,
+		KeyPath:  keyPath,
+		Timeout:  30 * time.Second,
+	}
+
+	client, err := NewClient(cfg)
+	if err != nil {
+		t.Fatalf("NewClient with key failed: %v", err)
+	}
+	defer client.Close()
+
+	if !client.IsConnected() {
+		t.Error("Client should be connected")
+	}
+
+	// Test exec
+	ctx := context.Background()
+	stdout, _, err := client.Exec(ctx, "echo key-auth-success")
+	if err != nil {
+		t.Fatalf("Exec failed: %v", err)
+	}
+	if string(stdout) != "key-auth-success\n" {
+		t.Errorf("Exec stdout = %q, want 'key-auth-success'", string(stdout))
+	}
+}
+
 func TestIntegration_Client(t *testing.T) {
 	// Skip if not running integration tests
 	if testing.Short() {
